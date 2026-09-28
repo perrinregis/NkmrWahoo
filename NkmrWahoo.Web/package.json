@@ -1,12 +1,12 @@
 {
-  "name": "pbowasm",
+  "name": "nkmrwahoo",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "build:css": "tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css",
     "watch:css": "tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css --watch",
-    "build": "npm run build:css && dotnet publish PboWasm.Web.csproj -c Release -o ./publish",
+    "build": "npm run build:css && dotnet publish NkmrWahoo.Web.csproj -c Release -o ./publish",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
