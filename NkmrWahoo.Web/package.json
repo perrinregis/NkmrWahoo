@@ -1,0 +1,22 @@
+{
+  "name": "pbowasm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css",
+    "watch:css": "tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css --watch",
+    "build": "npm run build:css && dotnet publish PboWasm.Web.csproj -c Release -o ./publish",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "autoprefixer": "^10.5.0",
+    "daisyui": "^4.12.23",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17"
+  }
+}

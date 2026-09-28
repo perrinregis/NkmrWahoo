@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/NkmrWahoo.Web/NkmrWahoo.Web.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "run",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/NkmrWahoo.Web/NkmrWahoo.Web.csproj"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^\\s*$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Building...",
+                    "endsPattern": "Now listening on:"
+                }
+            }
+        }
+    ]
+}

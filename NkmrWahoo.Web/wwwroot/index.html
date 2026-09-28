@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NkmrWahoo</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="NkmrWahoo.Web.styles.css" rel="stylesheet" />
+    <script type="importmap"></script>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
+</head>
+
+<body>
+    <div id="app">
+        <div class="flex items-center justify-center min-h-screen">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <div id="update-banner" class="hidden fixed bottom-4 right-4 left-4 md:left-auto z-[9999] bg-primary text-primary-content p-4 rounded-lg shadow-lg flex flex-row items-center justify-between gap-4">
+        <span class="font-bold">Une nouvelle version est disponible ! 🎉</span>
+        <button id="update-btn" class="btn btn-sm btn-secondary">Mettre à jour</button>
+    </div>
+
+    <script src="js/themeManager.js"></script>
+    <script>window.themeManager.initTheme();</script>
+    <script src="js/wahoo.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+
+        navigator.serviceWorker.register('service-worker.js').then(reg => {
+            const showBanner = (worker) => {
+                const banner = document.getElementById('update-banner');
+                banner.classList.remove('hidden');
+                document.getElementById('update-btn').addEventListener('click', () => {
+                    banner.classList.add('hidden');
+                    worker.postMessage({ type: 'SKIP_WAITING' });
+                }, { once: true });
+            };
+
+            // Vérifier s'il y a DÉJÀ une mise à jour en attente (ex: bannière ignorée avant)
+            if (reg.waiting) {
+                showBanner(reg.waiting);
+            }
+
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showBanner(newWorker);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

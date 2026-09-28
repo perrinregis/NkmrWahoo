@@ -1,0 +1,76 @@
+@page "/parametres"
+@inject IJSRuntime JSRuntime
+@inject NkmrWahoo.Web.Services.ILocalStorageService LocalStorage
+
+<PageTitle>Paramètres</PageTitle>
+
+<div class="max-w-3xl mx-auto p-4 space-y-6">
+    <h2 class="text-2xl font-bold mb-4">Réglages NoKeMaRe</h2>
+
+    <div class="space-y-4">
+        <!-- Section Thème Accordéon -->
+        <details class="collapse collapse-arrow bg-base-100 shadow-xl border border-base-300 group">
+            <summary class="collapse-title text-xl font-medium flex items-center gap-3">
+                <div class="p-2 bg-primary/10 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                    </svg>
+                </div>
+                Choisir un thème
+            </summary>
+            <div class="collapse-content">
+                <p class="text-sm opacity-70 mb-4 px-2">Personnalisez l'apparence de votre application</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 p-2">
+                    @foreach (var theme in themes)
+                    {
+                        <button class="btn btn-outline @(currentTheme == theme.Key ? "btn-active" : "")" 
+                                @onclick="() => ChangeTheme(theme.Key)">
+                            @theme.Value
+                        </button>
+                    }
+                </div>
+            </div>
+        </details>
+        
+        <!-- Plus de paramètres viendront ici -->
+        <div class="card bg-base-100 shadow-xl border border-base-300 opacity-60">
+            <div class="card-body">
+                <h3 class="card-title text-xl">⚙️ Autres réglages</h3>
+                <p class="text-sm">Bientôt disponible...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string currentTheme = "dark";
+
+    private Dictionary<string, string> themes = new()
+    {
+        { "light", "Light" },
+        { "dark", "Dark" },
+        { "cupcake", "Cupcake" },
+        { "retro", "Retro" },
+        { "cyberpunk", "Cyberpunk" },
+        { "valentine", "Valentine" },
+        { "aqua", "Aqua" },
+        { "dracula", "Dracula" },
+        { "nord", "Nord" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            currentTheme = await LocalStorage.GetItemAsync<string>("Theme") ?? "dark";
+        }
+        catch { }
+    }
+
+    private async Task ChangeTheme(string theme)
+    {
+        currentTheme = theme;
+        await JSRuntime.InvokeVoidAsync("themeManager.setTheme", theme);
+        await LocalStorage.SetItemAsync("Theme", theme);
+    }
+}

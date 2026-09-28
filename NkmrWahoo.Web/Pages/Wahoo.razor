@@ -1,0 +1,149 @@
+@page "/wahoo"
+@implements IDisposable
+@inject IJSRuntime JSRuntime
+@using Microsoft.JSInterop
+
+<PageTitle>Wahoo Kickr POC</PageTitle>
+
+<div class="container mx-auto p-4 pb-24">
+    <h1 class="text-3xl font-bold mb-4">Wahoo Kickr Bluetooth POC</h1>
+
+    <p class="mb-4">Cette page permet de valider la connexion Web Bluetooth à un home trainer (ex: Wahoo Kickr) et de lire la puissance.</p>
+
+    <div class="flex gap-4 mb-4">
+        <button class="btn btn-primary" @onclick="() => ConnectToDevice(false)" disabled="@isConnected">Connecter au Wahoo</button>
+        <button class="btn btn-outline btn-primary" @onclick="() => ConnectToDevice(true)" disabled="@isConnected">Tester (Mock)</button>
+        <button class="btn btn-secondary" @onclick="DisconnectDevice" disabled="@(!isConnected)">Déconnecter</button>
+    </div>
+
+    @if (isConnected)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div class="p-4 border rounded bg-base-200 shadow-md">
+                <h2 class="text-xl font-semibold mb-2">Données en direct</h2>
+                <div class="flex gap-4">
+                    <div class="stat p-2">
+                        <div class="stat-title">Puissance</div>
+                        <div class="stat-value text-primary text-3xl">@currentPower <span class="text-lg">W</span></div>
+                    </div>
+                    <div class="stat p-2">
+                        <div class="stat-title">Cadence</div>
+                        <div class="stat-value text-secondary text-3xl">@currentCadence <span class="text-lg">RPM</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border rounded bg-base-200 shadow-md">
+                <h2 class="text-xl font-semibold mb-2">Contrôle ERG</h2>
+                <div class="flex items-center gap-4">
+                    <button class="btn btn-circle btn-outline" @onclick="DecreaseTargetPower">-</button>
+                    <div class="text-2xl font-bold w-24 text-center">@targetPower W</div>
+                    <button class="btn btn-circle btn-outline" @onclick="IncreaseTargetPower">+</button>
+                </div>
+                <button class="btn btn-accent mt-4 w-full" @onclick="SetTargetPower">Appliquer cible (@targetPower W)</button>
+            </div>
+        </div>
+    }
+
+    <div class="mt-4 p-2 bg-base-300 rounded">
+        <p><strong>Statut :</strong> @statusMessage</p>
+    </div>
+</div>
+
+@code {
+    private bool isConnected = false;
+    private int currentPower = 0;
+    private int currentCadence = 0;
+    private int targetPower = 150;
+    private string statusMessage = "Non connecté. Assurez-vous que le Bluetooth est activé sur votre appareil.";
+    private DotNetObjectReference<Wahoo>? dotNetHelper;
+
+    protected override void OnInitialized()
+    {
+        dotNetHelper = DotNetObjectReference.Create(this);
+    }
+
+    private async Task ConnectToDevice(bool useMock)
+    {
+        statusMessage = useMock ? "Lancement du mode mock..." : "Demande d'appairage Bluetooth en cours...";
+        try
+        {
+            var result = await JSRuntime.InvokeAsync<string>("wahooBluetooth.connect", dotNetHelper, useMock);
+            if (result.Contains("succès"))
+            {
+                isConnected = true;
+            }
+            statusMessage = result;
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Erreur : {ex.Message}";
+        }
+    }
+
+    private async Task DisconnectDevice()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("wahooBluetooth.disconnect");
+            isConnected = false;
+            currentPower = 0;
+            currentCadence = 0;
+            statusMessage = "Déconnecté";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Erreur déconnexion : {ex.Message}";
+        }
+    }
+
+    private void IncreaseTargetPower()
+    {
+        targetPower += 5;
+    }
+
+    private void DecreaseTargetPower()
+    {
+        if (targetPower > 20) targetPower -= 5;
+    }
+
+    private async Task SetTargetPower()
+    {
+        try
+        {
+            statusMessage = $"Envoi de la cible ERG : {targetPower}W...";
+            var success = await JSRuntime.InvokeAsync<bool>("wahooBluetooth.setTargetPower", targetPower);
+            if (success)
+            {
+                statusMessage = $"Cible ERG réglée sur {targetPower}W.";
+            }
+            else
+            {
+                statusMessage = "Erreur : Impossible de régler la cible ERG (le home trainer ne supporte peut-être pas le profil FTMS).";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Erreur d'envoi ERG : {ex.Message}";
+        }
+    }
+
+    [JSInvokable]
+    public void UpdatePower(int power)
+    {
+        currentPower = power;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void UpdateCadence(int cadence)
+    {
+        currentCadence = cadence;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        dotNetHelper?.Dispose();
+    }
+}

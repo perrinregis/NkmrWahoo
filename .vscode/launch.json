@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Déboguer Blazor WebAssembly",
+            "type": "blazorwasm",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/NkmrWahoo.Web",
+            "url": "http://localhost:5054",
+            "browser": "chrome",
+            "userDataDir": "${workspaceFolder}/.vscode/chrome-debug"
+        }
+    ]
+}
