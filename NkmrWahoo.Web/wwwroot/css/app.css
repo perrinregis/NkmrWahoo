@@ -3658,6 +3658,10 @@ html:has(.drawer-toggle:checked) {
   width: 1rem;
 }
 
+.w-48 {
+  width: 12rem;
+}
+
 .w-5 {
   width: 1.25rem;
 }
@@ -3668,10 +3672,6 @@ html:has(.drawer-toggle:checked) {
 
 .w-6 {
   width: 1.5rem;
-}
-
-.w-60 {
-  width: 15rem;
 }
 
 .w-80 {
@@ -4487,12 +4487,12 @@ html:has(.drawer-toggle:checked) {
     height: 3.5rem;
   }
 
-  .sm\:w-60 {
-    width: 15rem;
+  .sm\:w-56 {
+    width: 14rem;
   }
 
-  .sm\:w-72 {
-    width: 18rem;
+  .sm\:w-60 {
+    width: 15rem;
   }
 
   .sm\:grid-cols-3 {
