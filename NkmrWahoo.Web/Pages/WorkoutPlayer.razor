@@ -35,14 +35,12 @@ else
         <!-- ======================================================== -->
         <main class="flex-1 flex flex-col h-full overflow-hidden relative">
             
-            <!-- 1. HUD DU HAUT (2 LIGNES COMPACTES ET TRÈS LISIBLES) -->
-            <header class="flex-none bg-base-100/95 backdrop-blur border-b border-base-content/10 px-2 sm:px-3 py-1 shadow-md z-30">
-                <!-- Ligne 1 : Instantané (Chrono, Watts, Cadence, Commandes) -->
-                <div class="grid grid-cols-5 items-center gap-1.5 sm:gap-2">
+            <!-- 1. HUD DU HAUT ULTRA-COMPACT (1 SEULE LIGNE GÉANTE & SANS TEXTES INUTILES) -->
+            <header class="flex-none bg-base-100/95 backdrop-blur border-b border-base-content/10 px-2 sm:px-3 py-1.5 shadow-md z-30">
+                <div class="flex items-center justify-between gap-1.5 sm:gap-3">
                     
-                    <!-- Burger compact / Menu rapide + Décompte Palier -->
-                    <div class="flex items-center gap-1 bg-base-200/80 rounded-lg py-0.5 px-1.5 sm:px-2 border border-base-content/5">
-                        <!-- Menu Burger discret qui ne prend pas de place en hauteur -->
+                    <!-- Burger compact + Chrono Palier (sans texte "Palier") -->
+                    <div class="flex items-center gap-1.5 bg-base-200/80 rounded-lg py-1 px-2 border border-base-content/5 flex-none whitespace-nowrap">
                         <div class="dropdown dropdown-bottom">
                             <label tabindex="0" class="btn btn-ghost btn-circle btn-xs text-primary" title="Menu rapide">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -56,34 +54,26 @@ else
                             </ul>
                         </div>
 
-                        <div class="flex-1 text-center">
-                            <div class="text-[9px] uppercase font-bold tracking-wider opacity-60">Palier</div>
-                            <div class="text-xl sm:text-2xl font-black font-mono text-accent leading-none">
-                                @FormatTime(stepRemainingSeconds)
-                            </div>
+                        <div class="text-xl sm:text-2xl font-black font-mono text-accent leading-none whitespace-nowrap">
+                            @FormatTime(stepRemainingSeconds)
                         </div>
                     </div>
 
-                    <!-- Puissance Réelle vs Cible -->
-                    <div class="text-center bg-base-200/80 rounded-lg py-0.5 px-2 border border-base-content/5 col-span-2 sm:col-span-1">
-                        <div class="text-[9px] uppercase font-bold tracking-wider opacity-60">Puissance</div>
-                        <div class="flex items-baseline justify-center gap-1 leading-none">
-                            <span class="text-xl sm:text-3xl font-black text-primary">@currentPower</span>
-                            <span class="text-xs opacity-50">/</span>
-                            <span class="text-base sm:text-xl font-bold text-warning">@currentTargetWatts <span class="text-[9px]">W</span></span>
-                        </div>
+                    <!-- Puissance Réelle / Cible (ex: 20/90 W sur une seule ligne stricte) -->
+                    <div class="bg-base-200/80 rounded-lg py-1 px-3 border border-base-content/5 flex items-baseline justify-center gap-1 whitespace-nowrap">
+                        <span class="text-xl sm:text-2xl font-black text-primary whitespace-nowrap">@currentPower</span>
+                        <span class="text-xs opacity-40">/</span>
+                        <span class="text-base sm:text-lg font-bold text-warning whitespace-nowrap">@currentTargetWatts&nbsp;W</span>
                     </div>
 
-                    <!-- Cadence -->
-                    <div class="text-center bg-base-200/80 rounded-lg py-0.5 px-2 border border-base-content/5">
-                        <div class="text-[9px] uppercase font-bold tracking-wider opacity-60">Cadence</div>
-                        <div class="text-xl sm:text-3xl font-black text-secondary leading-none">
-                            @currentCadence <span class="text-[10px] font-normal opacity-60">RPM</span>
-                        </div>
+                    <!-- Cadence (ex: 88 RPM sur une seule ligne) -->
+                    <div class="bg-base-200/80 rounded-lg py-1 px-3 border border-base-content/5 flex items-baseline justify-center gap-1 whitespace-nowrap">
+                        <span class="text-xl sm:text-2xl font-black text-secondary whitespace-nowrap">@currentCadence</span>
+                        <span class="text-xs font-normal opacity-70 whitespace-nowrap">RPM</span>
                     </div>
 
                     <!-- Bouton Pause & Bluetooth -->
-                    <div class="flex items-center justify-end gap-1.5 col-span-1 sm:col-span-2">
+                    <div class="flex items-center gap-1.5 flex-none ml-auto">
                         @if (isBtConnected)
                         {
                             <span class="badge badge-success badge-xs gap-1 hidden sm:inline-flex text-[10px] py-2">
@@ -115,16 +105,6 @@ else
                             ✕
                         </button>
                     </div>
-                </div>
-
-                <!-- Ligne 2 : Métriques de session & moyennes -->
-                <div class="flex items-center justify-between text-[10px] sm:text-[11px] font-medium opacity-75 mt-0.5 pt-0.5 border-t border-base-content/5 px-1">
-                    <div class="truncate max-w-[150px] sm:max-w-xs">Séance : <strong>@workout.Name</strong></div>
-                    <div>Écoulé : <strong class="font-mono">@FormatTime(totalElapsedSeconds)</strong> / @FormatTime(workout.Time)</div>
-                    <div>Vitesse : <strong>@speedKmh km/h</strong></div>
-                    <div>Moyenne : <strong>@averageWatts W</strong></div>
-                    <div>Énergie : <strong>@totalKj kJ</strong></div>
-                    <div>FTP : <strong>@userFtp W</strong> (@intensityBias%)</div>
                 </div>
             </header>
 
@@ -177,23 +157,37 @@ else
                                    HeightClass="h-12 sm:h-14"
                                    OnStepClicked="JumpToStep" />
 
-                <!-- Contrôles rapides sous la frise -->
-                <div class="flex items-center justify-between text-[11px] px-1">
-                    <div class="flex items-center gap-1.5">
+                <!-- Contrôles rapides sous la frise avec Temps Restant et Puissance Cumulée au milieu -->
+                <div class="flex items-center justify-between text-xs px-1 gap-2 whitespace-nowrap">
+                    <!-- Gauche : Saut de paliers -->
+                    <div class="flex items-center gap-1.5 flex-none">
                         <button class="btn btn-circle btn-xs btn-outline" @onclick="PreviousStep" disabled="@(currentStepIndex <= 0)" title="Palier précédent">
                             ⏮
                         </button>
                         <button class="btn btn-circle btn-xs btn-outline" @onclick="NextStep" disabled="@(currentStepIndex >= workout.WorkoutStepsArray.Count - 1)" title="Palier suivant">
                             ⏭
                         </button>
-                        <span class="opacity-70 text-[10px]">Paliers</span>
+                        <span class="opacity-70 text-[11px] hidden sm:inline">Paliers</span>
                     </div>
 
-                    <div class="flex items-center gap-2">
-                        <button class="btn btn-ghost btn-xs text-[10px]" @onclick="ForceLandscape">
+                    <!-- Milieu : Temps restant & Puissance cumulée -->
+                    <div class="flex items-center justify-center gap-3 sm:gap-6 text-xs font-semibold whitespace-nowrap">
+                        <div class="flex items-center gap-1.5">
+                            <span class="opacity-60 text-[10px] uppercase font-bold">Temps restant :</span>
+                            <span class="font-mono font-black text-sm sm:text-base text-accent whitespace-nowrap">@FormatTime(totalRemainingSeconds)</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="opacity-60 text-[10px] uppercase font-bold">Puissance cumulée :</span>
+                            <span class="font-black text-sm sm:text-base text-primary whitespace-nowrap">@totalKj&nbsp;kJ</span>
+                        </div>
+                    </div>
+
+                    <!-- Droite : Plein écran & Quitter -->
+                    <div class="flex items-center gap-2 flex-none">
+                        <button class="btn btn-ghost btn-xs text-[11px]" @onclick="ForceLandscape">
                             🖥️ Plein écran
                         </button>
-                        <button class="btn btn-error btn-xs btn-outline text-[10px]" @onclick="ConfirmExit">
+                        <button class="btn btn-error btn-xs btn-outline text-[11px]" @onclick="ConfirmExit">
                             Quitter
                         </button>
                     </div>
@@ -283,6 +277,7 @@ else
     private int stepElapsedSeconds = 0;
     private int stepRemainingSeconds = 0;
     private int totalElapsedSeconds = 0;
+    private int totalRemainingSeconds = 0;
     private long sumWattsSeconds = 0;
 
     // Métriques
@@ -321,6 +316,7 @@ else
 
         if (workout != null && workout.WorkoutStepsArray.Count > 0)
         {
+            totalRemainingSeconds = workout.Time;
             InitStep(0);
         }
     }
@@ -413,6 +409,7 @@ else
             stepElapsedSeconds++;
             stepRemainingSeconds--;
             totalElapsedSeconds++;
+            totalRemainingSeconds = Math.Max(0, workout.Time - totalElapsedSeconds);
 
             int effectiveWatts = (currentPower > 0) ? currentPower : currentTargetWatts;
             sumWattsSeconds += effectiveWatts;

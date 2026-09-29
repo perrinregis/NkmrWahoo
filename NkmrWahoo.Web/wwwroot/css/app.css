@@ -3521,14 +3521,6 @@ html:has(.drawer-toggle:checked) {
   z-index: 9999;
 }
 
-.col-span-1 {
-  grid-column: span 1 / span 1;
-}
-
-.col-span-2 {
-  grid-column: span 2 / span 2;
-}
-
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -3554,8 +3546,8 @@ html:has(.drawer-toggle:checked) {
   margin-bottom: 1.5rem;
 }
 
-.mt-0\.5 {
-  margin-top: 0.125rem;
+.ml-auto {
+  margin-left: auto;
 }
 
 .mt-1 {
@@ -3702,10 +3694,6 @@ html:has(.drawer-toggle:checked) {
   max-width: 56rem;
 }
 
-.max-w-\[150px\] {
-  max-width: 150px;
-}
-
 .max-w-lg {
   max-width: 32rem;
 }
@@ -3794,10 +3782,6 @@ html:has(.drawer-toggle:checked) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.grid-cols-5 {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
 .flex-row {
   flex-direction: row;
 }
@@ -3883,6 +3867,10 @@ html:has(.drawer-toggle:checked) {
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whitespace-nowrap {
   white-space: nowrap;
 }
 
@@ -4104,11 +4092,6 @@ html:has(.drawer-toggle:checked) {
   padding-right: 0.25rem;
 }
 
-.px-1\.5 {
-  padding-left: 0.375rem;
-  padding-right: 0.375rem;
-}
-
 .px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
@@ -4160,10 +4143,6 @@ html:has(.drawer-toggle:checked) {
 
 .ps-3 {
   padding-inline-start: 0.75rem;
-}
-
-.pt-0\.5 {
-  padding-top: 0.125rem;
 }
 
 .pt-2 {
@@ -4356,10 +4335,6 @@ html:has(.drawer-toggle:checked) {
   opacity: 0.4;
 }
 
-.opacity-50 {
-  opacity: 0.5;
-}
-
 .opacity-60 {
   opacity: 0.6;
 }
@@ -4496,14 +4471,6 @@ html:has(.drawer-toggle:checked) {
 }
 
 @media (min-width: 640px) {
-  .sm\:col-span-1 {
-    grid-column: span 1 / span 1;
-  }
-
-  .sm\:col-span-2 {
-    grid-column: span 2 / span 2;
-  }
-
   .sm\:mt-8 {
     margin-top: 2rem;
   }
@@ -4528,10 +4495,6 @@ html:has(.drawer-toggle:checked) {
     width: 18rem;
   }
 
-  .sm\:max-w-xs {
-    max-width: 20rem;
-  }
-
   .sm\:grid-cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -4544,13 +4507,12 @@ html:has(.drawer-toggle:checked) {
     align-items: center;
   }
 
-  .sm\:gap-2 {
-    gap: 0.5rem;
+  .sm\:gap-3 {
+    gap: 0.75rem;
   }
 
-  .sm\:px-2 {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+  .sm\:gap-6 {
+    gap: 1.5rem;
   }
 
   .sm\:px-3 {
@@ -4563,22 +4525,13 @@ html:has(.drawer-toggle:checked) {
     line-height: 2rem;
   }
 
-  .sm\:text-3xl {
-    font-size: 1.875rem;
-    line-height: 2.25rem;
-  }
-
-  .sm\:text-\[11px\] {
-    font-size: 11px;
+  .sm\:text-base {
+    font-size: 1rem;
+    line-height: 1.5rem;
   }
 
   .sm\:text-lg {
     font-size: 1.125rem;
-    line-height: 1.75rem;
-  }
-
-  .sm\:text-xl {
-    font-size: 1.25rem;
     line-height: 1.75rem;
   }
 }
