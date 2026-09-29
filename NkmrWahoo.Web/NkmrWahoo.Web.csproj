@@ -5,7 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <PublishDir>publish\</PublishDir>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,8 +19,18 @@
     <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
   </ItemGroup>
 
-  <Target Name="Tailwind" BeforeTargets="Build">
+  <!-- Tailwind CSS Compilation -->
+  <Target Name="Tailwind" BeforeTargets="Build;Publish" Inputs="Styles/app.css;@(Content->WithMetadataValue('Extension', '.razor'));tailwind.config.js" Outputs="wwwroot/css/app.css">
+    <Exec Command="npm install" Condition="!Exists('node_modules')" />
     <Exec Command="npm run build:css" />
+  </Target>
+
+  <!-- Workaround for .NET 9/10 static asset fingerprinting on pure static hosts -->
+  <Target Name="FixFingerprint" AfterTargets="Publish">
+    <ItemGroup>
+      <HashedBlazorJs Include="$(PublishDir)wwwroot/_framework/blazor.webassembly.*.js" Exclude="$(PublishDir)wwwroot/_framework/blazor.webassembly.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HashedBlazorJs)" DestinationFiles="$(PublishDir)wwwroot/_framework/blazor.webassembly.js" Condition="'@(HashedBlazorJs)' != ''" />
   </Target>
 
 </Project>
