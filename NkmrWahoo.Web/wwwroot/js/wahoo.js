@@ -178,5 +178,32 @@ window.workoutScreen = {
         if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
+    },
+    toggleFullscreen: async function () {
+        try {
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+                if (screen.orientation && screen.orientation.lock) {
+                    await screen.orientation.lock("landscape");
+                }
+                return true;
+            } else {
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+                if (screen.orientation && screen.orientation.unlock) {
+                    screen.orientation.unlock();
+                }
+                return false;
+            }
+        } catch (e) {
+            console.warn("Fullscreen toggle error:", e);
+            return !!document.fullscreenElement;
+        }
+    },
+    isFullscreen: function () {
+        return !!document.fullscreenElement;
     }
 };

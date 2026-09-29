@@ -2155,10 +2155,6 @@ html {
   .btn-warning {
     --btn-color: var(--fallback-wa);
   }
-
-  .btn-error {
-    --btn-color: var(--fallback-er);
-  }
 }
 
 @supports (color: color-mix(in oklab, black, black)) {
@@ -2247,10 +2243,6 @@ html {
   .btn-warning {
     --btn-color: var(--wa);
   }
-
-  .btn-error {
-    --btn-color: var(--er);
-  }
 }
 
 .btn-secondary {
@@ -2281,12 +2273,6 @@ html {
   --tw-text-opacity: 1;
   color: var(--fallback-wac,oklch(var(--wac)/var(--tw-text-opacity)));
   outline-color: var(--fallback-wa,oklch(var(--wa)/1));
-}
-
-.btn-error {
-  --tw-text-opacity: 1;
-  color: var(--fallback-erc,oklch(var(--erc)/var(--tw-text-opacity)));
-  outline-color: var(--fallback-er,oklch(var(--er)/1));
 }
 
 .btn.glass {
@@ -4288,6 +4274,10 @@ html:has(.drawer-toggle:checked) {
   color: var(--fallback-bc,oklch(var(--bc)/var(--tw-text-opacity, 1)));
 }
 
+.text-base-content\/80 {
+  color: var(--fallback-bc,oklch(var(--bc)/0.8));
+}
+
 .text-error {
   --tw-text-opacity: 1;
   color: var(--fallback-er,oklch(var(--er)/var(--tw-text-opacity, 1)));
@@ -4454,6 +4444,15 @@ html:has(.drawer-toggle:checked) {
 
 .hover\:border-base-content\/20:hover {
   border-color: var(--fallback-bc,oklch(var(--bc)/0.2));
+}
+
+.hover\:bg-error\/20:hover {
+  background-color: var(--fallback-er,oklch(var(--er)/0.2));
+}
+
+.hover\:text-primary:hover {
+  --tw-text-opacity: 1;
+  color: var(--fallback-p,oklch(var(--p)/var(--tw-text-opacity, 1)));
 }
 
 .hover\:opacity-100:hover {
