@@ -4,189 +4,250 @@
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
-<PageTitle>Entraînement en cours - @(workout?.Name ?? "NkmrWahoo")</PageTitle>
+<PageTitle>Séance MyWhoosh - @(workout?.Name ?? "Entraînement")</PageTitle>
 
 @if (workout == null)
 {
-    <div class="flex justify-center items-center min-h-[60vh]">
+    <div class="flex justify-center items-center min-h-[80vh]">
         <span class="loading loading-spinner loading-lg text-primary"></span>
     </div>
 }
 else
 {
-    <div class="container mx-auto p-2 sm:p-4 pb-28 max-w-5xl space-y-4 select-none">
+    <!-- OVERLAY EN CAS D'ORIENTATION PORTRAIT SUR MOBILE -->
+    <div class="portrait-warning fixed inset-0 z-[100] bg-neutral text-neutral-content flex flex-col items-center justify-center p-6 text-center md:hidden">
+        <div class="text-6xl animate-spin mb-4" style="animation-duration: 4s;">🔄</div>
+        <h2 class="text-2xl font-black mb-2">Mode Paysage Recommandé</h2>
+        <p class="text-sm opacity-80 max-w-xs mb-6">
+            Pour afficher le cockpit d'entraînement MyWhoosh avec la frise et la liste des paliers, veuillez tourner votre téléphone à l'horizontale.
+        </p>
+        <button class="btn btn-primary shadow-lg" @onclick="ForceLandscape">
+            Pivoter en plein écran
+        </button>
+    </div>
+
+    <!-- COCKPIT D'ENTRAÎNEMENT MYWHOOSH COMPLET (PAYSAGE / PC) -->
+    <div class="h-screen w-full flex flex-col overflow-hidden bg-base-300 select-none text-base-content font-sans">
         
-        <!-- Barre supérieure : Statut & Contrôle Bluetooth -->
-        <div class="navbar bg-base-100 rounded-xl shadow-md border border-base-300 p-2 sm:p-4 flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <button class="btn btn-ghost btn-circle btn-sm" @onclick="ConfirmExit">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        <!-- 1. HAUT : HUD BANDEAU DES MÉTRIQUES (2 NIVEAUX) -->
+        <header class="flex-none bg-base-100/95 backdrop-blur border-b border-base-content/10 px-3 py-1.5 shadow-md z-30">
+            <!-- Niveau 1 : Métriques instantanées prioritaires -->
+            <div class="grid grid-cols-5 items-center gap-2">
+                <!-- Décompte Palier -->
+                <div class="text-center bg-base-200/80 rounded-lg py-1 px-2 border border-base-content/5">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Chrono Palier</div>
+                    <div class="text-2xl sm:text-3xl font-black font-mono text-accent leading-none">
+                        @FormatTime(stepRemainingSeconds)
+                    </div>
+                </div>
+
+                <!-- Puissance Réelle vs Cible -->
+                <div class="text-center bg-base-200/80 rounded-lg py-1 px-2 border border-base-content/5 col-span-2 sm:col-span-1">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Puissance</div>
+                    <div class="flex items-baseline justify-center gap-1.5 leading-none">
+                        <span class="text-2xl sm:text-3xl font-black text-primary">@currentPower</span>
+                        <span class="text-xs opacity-50">/</span>
+                        <span class="text-lg sm:text-xl font-bold text-warning">@currentTargetWatts <span class="text-[10px]">W</span></span>
+                    </div>
+                </div>
+
+                <!-- Cadence -->
+                <div class="text-center bg-base-200/80 rounded-lg py-1 px-2 border border-base-content/5">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Cadence</div>
+                    <div class="text-2xl sm:text-3xl font-black text-secondary leading-none">
+                        @currentCadence <span class="text-xs font-normal opacity-60">RPM</span>
+                    </div>
+                </div>
+
+                <!-- Bouton Pause & Bluetooth -->
+                <div class="flex items-center justify-end gap-2 col-span-1 sm:col-span-2">
+                    @if (isBtConnected)
+                    {
+                        <span class="badge badge-success badge-sm gap-1 hidden sm:inline-flex text-[11px]">
+                            <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                            @(isMockMode ? "Mock" : "Wahoo")
+                        </span>
+                    }
+                    else
+                    {
+                        <button class="btn btn-warning btn-xs" @onclick="() => ConnectBluetooth(false)">
+                            📡 Connecter
+                        </button>
+                    }
+
+                    @if (isRunning)
+                    {
+                        <button class="btn btn-warning btn-sm gap-1" @onclick="PauseWorkout" title="Mettre en pause">
+                            ⏸ <span class="hidden sm:inline">Pause</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success btn-sm gap-1" @onclick="StartWorkout" title="Lancer / Reprendre">
+                            ▶ <span class="hidden sm:inline">Reprendre</span>
+                        </button>
+                    }
+
+                    <button class="btn btn-ghost btn-circle btn-xs" @onclick="ConfirmExit" title="Quitter">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Niveau 2 : Métriques de session & cumuls -->
+            <div class="flex items-center justify-between text-[11px] font-medium opacity-75 mt-1 pt-1 border-t border-base-content/5 px-1">
+                <div>Séance : <strong>@workout.Name</strong></div>
+                <div>Écoulé : <strong class="font-mono">@FormatTime(totalElapsedSeconds)</strong> / @FormatTime(workout.Time)</div>
+                <div>Vitesse est. : <strong>@speedKmh km/h</strong></div>
+                <div>Puissance moy. : <strong>@averageWatts W</strong></div>
+                <div>Énergie : <strong>@totalKj kJ</strong></div>
+                <div>FTP : <strong>@userFtp W</strong> (@intensityBias%)</div>
+            </div>
+        </header>
+
+        <!-- 2. CORPS CENTRAL : SCÈNE CENTRALE + PANNEAU LATÉRAL DROIT MYWHOOSH -->
+        <div class="flex-1 flex overflow-hidden relative">
+            
+            <!-- A. ZONE CENTRALE (Route / Horizon & Messages Coaching) -->
+            <div class="flex-1 flex flex-col justify-between p-4 relative overflow-hidden bg-gradient-to-b from-base-200 to-base-300">
+                
+                <!-- Décor visuel de route stylisée (Espace réservé pour la route défilante) -->
+                <div class="absolute inset-0 flex flex-col justify-end pointer-events-none opacity-20">
+                    <svg viewBox="0 0 1000 300" preserveAspectRatio="none" class="w-full h-44">
+                        <polygon points="450,0 550,0 900,300 100,300" fill="currentColor" />
+                        <line x1="500" y1="0" x2="500" y2="300" stroke="white" stroke-width="4" stroke-dasharray="20,15" />
                     </svg>
-                </button>
-                <div>
-                    <h1 class="text-base sm:text-lg font-bold leading-tight truncate max-w-[200px] sm:max-w-md">@workout.Name</h1>
-                    <div class="text-xs opacity-70">FTP réglée : <strong>@userFtp W</strong> | Biais : <strong>@intensityBias%</strong></div>
                 </div>
-            </div>
 
-            <!-- Boutons de connexion Bluetooth / Mock -->
-            <div class="flex items-center gap-2">
-                @if (!isBtConnected)
+                <!-- Messages de coaching géants au centre -->
+                <div class="z-10 flex flex-col items-center justify-center flex-1">
+                    @if (!string.IsNullOrEmpty(activeMessage))
+                    {
+                        <div class="alert alert-info shadow-2xl py-4 px-6 max-w-lg text-center text-lg sm:text-xl font-bold animate-bounce border-2 border-white/40 backdrop-blur-md bg-info/90 text-info-content">
+                            <span>💬 @activeMessage</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center opacity-40 select-none">
+                            <div class="text-4xl mb-1">🚴‍♂️</div>
+                            <div class="text-xs uppercase tracking-widest font-bold">Zone @currentStep?.GetZoneName(currentTargetRatio)</div>
+                            <div class="text-sm">Maintenez le rythme et la cadence</div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Indicateur rapide palier suivant en bas de zone centrale -->
+                @if (nextStep != null)
                 {
-                    <button class="btn btn-primary btn-sm" @onclick="() => ConnectBluetooth(false)">
-                        📡 Connecter Wahoo
-                    </button>
-                    <button class="btn btn-outline btn-sm hidden sm:inline-flex" @onclick="() => ConnectBluetooth(true)">
-                        🧪 Test (Mock)
-                    </button>
-                }
-                else
-                {
-                    <span class="badge badge-success gap-1 text-xs py-3 px-2 font-medium">
-                        <span class="inline-block w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                        @(isMockMode ? "Mock Actif" : "Wahoo Connecté")
-                    </span>
-                }
-            </div>
-        </div>
-
-        <!-- Alerte / Message de Coaching actif -->
-        @if (!string.IsNullOrEmpty(activeMessage))
-        {
-            <div class="alert alert-info shadow-lg py-3 px-4 text-center text-base sm:text-lg font-bold animate-bounce border-2 border-info">
-                <span>💬 @activeMessage</span>
-            </div>
-        }
-
-        <!-- DASHBOARD GÉANT : Métriques en Direct -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <!-- 1. Puissance Actuelle (Watts) -->
-            <div class="card bg-base-100 border border-base-300 shadow-md p-3 text-center">
-                <div class="text-xs uppercase tracking-wider font-semibold opacity-70">Puissance Actuelle</div>
-                <div class="text-4xl sm:text-6xl font-black text-primary my-1">
-                    @currentPower
-                    <span class="text-sm sm:text-base font-normal text-base-content/60">W</span>
-                </div>
-                <div class="text-xs font-semibold" style="color: @currentZoneColor">@currentZoneName</div>
-            </div>
-
-            <!-- 2. Puissance Cible (Watts) -->
-            <div class="card bg-base-100 border border-base-300 shadow-md p-3 text-center">
-                <div class="text-xs uppercase tracking-wider font-semibold opacity-70">Cible ERG</div>
-                <div class="text-4xl sm:text-6xl font-black text-warning my-1">
-                    @currentTargetWatts
-                    <span class="text-sm sm:text-base font-normal text-base-content/60">W</span>
-                </div>
-                <div class="text-xs opacity-75">
-                    @Math.Round(currentTargetRatio * 100)% FTP @(currentStep?.IsRamp == true ? "(Rampe)" : "")
-                </div>
-            </div>
-
-            <!-- 3. Cadence (RPM) -->
-            <div class="card bg-base-100 border border-base-300 shadow-md p-3 text-center">
-                <div class="text-xs uppercase tracking-wider font-semibold opacity-70">Cadence</div>
-                <div class="text-4xl sm:text-6xl font-black text-secondary my-1">
-                    @currentCadence
-                    <span class="text-sm sm:text-base font-normal text-base-content/60">RPM</span>
-                </div>
-                <div class="text-xs opacity-75">
-                    @(currentStep?.Rpm > 0 ? $"Cible: {currentStep.Rpm} RPM" : "Cadence libre")
-                </div>
-            </div>
-
-            <!-- 4. Chrono Dégressif du Palier -->
-            <div class="card bg-base-100 border border-base-300 shadow-md p-3 text-center">
-                <div class="text-xs uppercase tracking-wider font-semibold opacity-70">Temps Palier Restant</div>
-                <div class="text-4xl sm:text-6xl font-black text-accent my-1 font-mono">
-                    @FormatTime(stepRemainingSeconds)
-                </div>
-                <div class="text-xs opacity-75">
-                    Palier @(currentStepIndex + 1) / @workout.WorkoutStepsArray.Count
-                </div>
-            </div>
-        </div>
-
-        <!-- PROGRESSION GLOBALE -->
-        <div class="card bg-base-100 border border-base-300 shadow p-3">
-            <div class="flex justify-between text-xs sm:text-sm font-semibold opacity-80 mb-1">
-                <div>Écoulé : <strong class="font-mono">@FormatTime(totalElapsedSeconds)</strong></div>
-                <div>Progression : <strong>@Math.Round(progressPercentage)%</strong></div>
-                <div>Restant : <strong class="font-mono">@FormatTime(totalRemainingSeconds)</strong></div>
-            </div>
-            <progress class="progress progress-primary w-full h-3" value="@totalElapsedSeconds" max="@workout.Time"></progress>
-        </div>
-
-        <!-- FRISE VISUELLE DU PROFIL D'EFFORT (INTERVALLOMETRE) -->
-        <div class="card bg-base-100 border border-base-300 shadow-lg p-3">
-            <div class="text-xs font-bold uppercase tracking-wider opacity-70 mb-2 flex justify-between">
-                <span>Profil des Intervalles</span>
-                <span>Zone active : <span style="color: @activeIntervalColor">@activeIntervalName</span></span>
-            </div>
-
-            <div class="w-full h-28 sm:h-36 bg-base-300 rounded-lg overflow-hidden flex items-end p-1 gap-1 border border-base-content/10 relative">
-                @for (int i = 0; i < workout.WorkoutStepsArray.Count; i++)
-                {
-                    var idx = i;
-                    var step = workout.WorkoutStepsArray[idx];
-                    var ratio = step.IsRamp ? ((step.StartPower + step.EndPower) / 2.0) : step.Power;
-                    var color = step.GetZoneColor(ratio);
-                    var heightPct = Math.Clamp(ratio * 55, 12, 100);
-                    var isCurrent = (idx == currentStepIndex);
-
-                    <div style="flex-grow: @Math.Max(step.Time, 5); height: @heightPct%; background-color: @color;"
-                         class="rounded-t transition-all relative cursor-pointer @(isCurrent ? "ring-4 ring-white brightness-125 z-10 shadow-lg" : "opacity-80 hover:opacity-100")"
-                         title="Palier @(idx+1) : @step.Time s à @Math.Round(ratio * 100)% FTP"
-                         @onclick="() => JumpToStep(idx)">
-                        @if (isCurrent)
-                        {
-                            <div class="absolute -top-3 left-1/2 -translate-x-1/2 text-xs">▼</div>
-                        }
+                    <div class="z-10 bg-base-100/70 backdrop-blur rounded-lg py-1 px-3 text-xs self-start flex items-center gap-2 border border-base-content/10">
+                        <span class="opacity-60">À suivre :</span>
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: @nextStep.GetZoneColor(nextStep.IsRamp ? nextStep.StartPower : nextStep.Power)"></span>
+                        <strong>@Math.Round((nextStep.IsRamp ? nextStep.StartPower : nextStep.Power) * userFtp) W</strong>
+                        <span>(@FormatTime(nextStep.Time))</span>
                     </div>
                 }
             </div>
+
+            <!-- B. PANNEAU DROIT (LISTE DES ÉTAPES MYWHOOSH + RÉGLAGE FTP) -->
+            <aside class="w-64 sm:w-72 flex-none bg-base-100 border-l border-base-content/10 flex flex-col z-20 shadow-xl">
+                <!-- En-tête liste -->
+                <div class="p-2 border-b border-base-content/10 bg-base-200/60 flex justify-between items-center text-xs font-bold">
+                    <span>Paliers (@(currentStepIndex + 1)/@workout.WorkoutStepsArray.Count)</span>
+                    <span class="badge badge-sm badge-neutral">@workout.FormattedTotalTime</span>
+                </div>
+
+                <!-- Liste verticale des étapes qui défilent -->
+                <div class="flex-1 overflow-y-auto p-1.5 space-y-1.5 text-xs" id="workout-steps-container">
+                    @for (int i = 0; i < workout.WorkoutStepsArray.Count; i++)
+                    {
+                        var idx = i;
+                        var step = workout.WorkoutStepsArray[idx];
+                        var isCurrent = (idx == currentStepIndex);
+                        var isPast = (idx < currentStepIndex);
+                        var ratio = step.IsRamp ? ((step.StartPower + step.EndPower) / 2.0) : step.Power;
+                        var targetW = (int)Math.Round(ratio * userFtp * (intensityBias / 100.0));
+                        var zoneColor = step.GetZoneColor(ratio);
+
+                        <div id="step-row-@idx"
+                             class="p-2 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 @(isCurrent ? "bg-primary text-primary-content font-bold shadow-md border-primary ring-2 ring-primary/40 scale-[1.02]" : isPast ? "opacity-40 bg-base-200/50 border-transparent hover:opacity-80" : "bg-base-200 border-base-content/5 hover:border-base-content/20")"
+                             @onclick="() => JumpToStep(idx)">
+                            <div class="flex items-center gap-2 truncate">
+                                <span class="w-2 h-6 rounded-full flex-none" style="background-color: @zoneColor"></span>
+                                <div>
+                                    <div class="truncate">
+                                        @(step.IsRamp ? $"Rampe {Math.Round(step.StartPower*userFtp)}→{Math.Round(step.EndPower*userFtp)}W" : $"{targetW} W")
+                                    </div>
+                                    <div class="text-[10px] opacity-70">
+                                        @step.GetZoneName(ratio)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-right font-mono flex-none font-bold">
+                                @(isCurrent ? FormatTime(stepRemainingSeconds) : FormatTime(step.Time))
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Bas du panneau droit : Boutons FTP / Biais d'intensité -->
+                <div class="p-2 border-t border-base-content/10 bg-base-200/80 flex flex-col gap-1.5">
+                    <div class="text-[10px] font-bold uppercase tracking-wider opacity-60 text-center">
+                        Intensité / FTP : @intensityBias% (@currentTargetWatts W)
+                    </div>
+                    <div class="flex items-center justify-between gap-1">
+                        <button class="btn btn-neutral btn-sm flex-1 font-bold text-base" @onclick="() => AdjustIntensity(-5)">-5%</button>
+                        <button class="btn btn-neutral btn-sm flex-1 font-bold text-base" @onclick="() => AdjustIntensity(-1)">-1%</button>
+                        <button class="btn btn-neutral btn-sm flex-1 font-bold text-base" @onclick="() => AdjustIntensity(1)">+1%</button>
+                        <button class="btn btn-neutral btn-sm flex-1 font-bold text-base" @onclick="() => AdjustIntensity(5)">+5%</button>
+                    </div>
+                </div>
+            </aside>
         </div>
 
-        <!-- BARRE DE CONTRÔLES TACTILE (GÉANTE & ERGONOMIQUE) -->
-        <div class="fixed bottom-0 left-0 right-0 p-3 bg-base-100/95 backdrop-blur-md border-t border-base-300 z-50 flex items-center justify-around gap-2 max-w-5xl mx-auto shadow-2xl">
-            <!-- Reculer d'un palier -->
-            <button class="btn btn-outline btn-circle btn-lg" @onclick="PreviousStep" disabled="@(currentStepIndex <= 0)" title="Palier précédent">
-                ⏮
-            </button>
+        <!-- 3. BAS : FRISE HORIZONTALE PANORAMIQUE & CONTRÔLES PALIERS -->
+        <footer class="flex-none bg-base-100 border-t border-base-content/10 p-2 flex flex-col gap-1.5 z-30 shadow-2xl">
+            <!-- Profil SVG des Intervalles (avec pentes et curseur en direct) -->
+            <WorkoutProfileSvg Workout="@workout"
+                               CurrentStepIndex="@currentStepIndex"
+                               ElapsedTotalSeconds="@totalElapsedSeconds"
+                               HeightClass="h-14 sm:h-16"
+                               OnStepClicked="JumpToStep" />
 
-            <!-- Play / Pause -->
-            @if (isRunning)
-            {
-                <button class="btn btn-warning btn-circle btn-lg text-2xl shadow-lg" @onclick="PauseWorkout" title="Mettre en pause">
-                    ⏸
-                </button>
-            }
-            else
-            {
-                <button class="btn btn-success btn-circle btn-lg text-2xl shadow-lg" @onclick="StartWorkout" title="Démarrer / Reprendre">
-                    ▶
-                </button>
-            }
+            <!-- Barre de navigation rapide entre paliers -->
+            <div class="flex items-center justify-between text-xs px-1">
+                <div class="flex items-center gap-2">
+                    <button class="btn btn-circle btn-xs btn-outline" @onclick="PreviousStep" disabled="@(currentStepIndex <= 0)" title="Palier précédent">
+                        ⏮
+                    </button>
+                    <button class="btn btn-circle btn-xs btn-outline" @onclick="NextStep" disabled="@(currentStepIndex >= workout.WorkoutStepsArray.Count - 1)" title="Palier suivant">
+                        ⏭
+                    </button>
+                    <span class="opacity-70">Sauter d'étape</span>
+                </div>
 
-            <!-- Avancer d'un palier -->
-            <button class="btn btn-outline btn-circle btn-lg" @onclick="NextStep" disabled="@(currentStepIndex >= workout.WorkoutStepsArray.Count - 1)" title="Palier suivant">
-                ⏭
-            </button>
-
-            <!-- Réglage du Biais d'Intensité % -->
-            <div class="join">
-                <button class="btn btn-neutral btn-sm join-item" @onclick="() => AdjustIntensity(-5)">-5%</button>
-                <button class="btn btn-neutral btn-sm join-item font-bold">@intensityBias%</button>
-                <button class="btn btn-neutral btn-sm join-item" @onclick="() => AdjustIntensity(5)">+5%</button>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn-ghost btn-xs text-xs" @onclick="ForceLandscape">
+                        🖥️ Plein écran
+                    </button>
+                    <button class="btn btn-error btn-xs btn-outline" @onclick="ConfirmExit">
+                        Quitter la séance
+                    </button>
+                </div>
             </div>
-
-            <!-- Arrêter / Quitter -->
-            <button class="btn btn-error btn-outline btn-sm" @onclick="ConfirmExit">
-                Quitter
-            </button>
-        </div>
+        </footer>
     </div>
 }
+
+<style>
+    /* Sur mobile en mode paysage, masquer l'alerte d'orientation */
+    @@media (orientation: landscape) {
+        .portrait-warning {
+            display: none !important;
+        }
+    }
+</style>
 
 @code {
     [Parameter]
@@ -194,22 +255,24 @@ else
 
     private MyWhooshWorkout? workout;
     private int userFtp = 200;
-    private int intensityBias = 100; // 100% de la puissance d'origine
+    private int intensityBias = 100;
 
-    // État du lecteur
+    // État
     private bool isRunning = false;
     private int currentStepIndex = 0;
     private int stepElapsedSeconds = 0;
     private int stepRemainingSeconds = 0;
     private int totalElapsedSeconds = 0;
-    private int totalRemainingSeconds = 0;
-    private double progressPercentage = 0.0;
+    private long sumWattsSeconds = 0;
 
-    // Métriques dynamiques
+    // Métriques
     private int currentPower = 0;
     private int currentCadence = 0;
     private int currentTargetWatts = 0;
     private double currentTargetRatio = 0.0;
+    private double speedKmh = 0.0;
+    private int averageWatts = 0;
+    private int totalKj = 0;
     private string activeMessage = "";
     private int messageDisplaySeconds = 0;
 
@@ -226,10 +289,9 @@ else
         ? workout.WorkoutStepsArray[currentStepIndex] 
         : null;
 
-    private string currentZoneColor => currentStep?.GetZoneColor((double)currentPower / Math.Max(userFtp, 1)) ?? "#38bdf8";
-    private string currentZoneName => currentStep?.GetZoneName((double)currentPower / Math.Max(userFtp, 1)) ?? "";
-    private string activeIntervalColor => currentStep?.GetZoneColor(currentTargetRatio) ?? "#38bdf8";
-    private string activeIntervalName => currentStep?.GetZoneName(currentTargetRatio) ?? "";
+    private WorkoutStep? nextStep => (workout != null && currentStepIndex + 1 < workout.WorkoutStepsArray.Count) 
+        ? workout.WorkoutStepsArray[currentStepIndex + 1] 
+        : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -239,9 +301,30 @@ else
 
         if (workout != null && workout.WorkoutStepsArray.Count > 0)
         {
-            totalRemainingSeconds = workout.Time;
             InitStep(0);
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Tenter de verrouiller l'orientation paysage au chargement
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("workoutScreen.lockLandscape");
+            }
+            catch { }
+        }
+    }
+
+    private async Task ForceLandscape()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutScreen.lockLandscape");
+        }
+        catch { }
     }
 
     private void InitStep(int stepIndex)
@@ -254,6 +337,9 @@ else
         activeMessage = "";
 
         UpdateTargetPower(forceSendToTrainer: true);
+
+        // Défiler la liste de droite vers le palier actif
+        _ = JSRuntime.InvokeVoidAsync("workoutScreen.scrollToActiveStep", $"step-row-{stepIndex}");
     }
 
     private void UpdateTargetPower(bool forceSendToTrainer = false)
@@ -282,7 +368,6 @@ else
         timerCts = new CancellationTokenSource();
         periodicTimer = new System.Threading.PeriodicTimer(TimeSpan.FromSeconds(1));
 
-        // Envoi immédiat de la cible au home-trainer
         UpdateTargetPower(forceSendToTrainer: true);
 
         _ = RunWorkoutLoop(timerCts.Token);
@@ -295,7 +380,6 @@ else
         periodicTimer?.Dispose();
         periodicTimer = null;
 
-        // Réduire la résistance en pause à une valeur d'attente légère
         if (isBtConnected)
         {
             _ = JSRuntime.InvokeAsync<bool>("wahooBluetooth.setTargetPower", Math.Min(currentTargetWatts, 100));
@@ -311,15 +395,22 @@ else
             stepElapsedSeconds++;
             stepRemainingSeconds--;
             totalElapsedSeconds++;
-            totalRemainingSeconds = Math.Max(0, workout.Time - totalElapsedSeconds);
-            progressPercentage = Math.Clamp(((double)totalElapsedSeconds / workout.Time) * 100.0, 0, 100);
 
-            // Vérification des messages de coaching à afficher
+            // Calcul métriques moyennes et vitesse estimée
+            int effectiveWatts = (currentPower > 0) ? currentPower : currentTargetWatts;
+            sumWattsSeconds += effectiveWatts;
+            averageWatts = (int)(sumWattsSeconds / Math.Max(totalElapsedSeconds, 1));
+            totalKj = (int)Math.Round(sumWattsSeconds / 1000.0);
+
+            // Modèle vélo standard : v = 3.6 * (P / 0.35)^(1/3)
+            speedKmh = Math.Round(3.6 * Math.Pow(Math.Max(effectiveWatts, 10) / 0.35, 1.0 / 3.0), 1);
+
+            // Messages coaching
             var msg = currentStep.WorkoutMessage.FirstOrDefault(m => m.Time == stepElapsedSeconds);
             if (msg != null)
             {
                 activeMessage = msg.Message;
-                messageDisplaySeconds = 8; // Afficher pendant 8 secondes
+                messageDisplaySeconds = 8;
             }
             else if (messageDisplaySeconds > 0)
             {
@@ -327,13 +418,13 @@ else
                 if (messageDisplaySeconds == 0) activeMessage = "";
             }
 
-            // Mise à jour de la puissance en cas de rampe
+            // Rampes
             if (currentStep.IsRamp)
             {
                 UpdateTargetPower(forceSendToTrainer: true);
             }
 
-            // Fin du palier ?
+            // Fin de palier
             if (stepRemainingSeconds <= 0)
             {
                 if (currentStepIndex < workout.WorkoutStepsArray.Count - 1)
@@ -342,9 +433,8 @@ else
                 }
                 else
                 {
-                    // Workout terminé !
                     PauseWorkout();
-                    activeMessage = "🎉 Félicitations ! Entraînement terminé avec succès !";
+                    activeMessage = "🎉 Entraînement terminé ! Excellent travail !";
                     break;
                 }
             }
@@ -420,14 +510,19 @@ else
 
     private string FormatTime(int seconds)
     {
-        int m = seconds / 60;
-        int s = seconds % 60;
+        int m = Math.Max(0, seconds) / 60;
+        int s = Math.Max(0, seconds) % 60;
         return $"{m:D2}:{s:D2}";
     }
 
-    private void ConfirmExit()
+    private async Task ConfirmExit()
     {
         PauseWorkout();
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutScreen.unlockOrientation");
+        }
+        catch { }
         Navigation.NavigateTo("/workouts");
     }
 

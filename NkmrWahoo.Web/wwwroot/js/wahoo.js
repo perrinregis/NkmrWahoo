@@ -149,3 +149,34 @@ window.wahooBluetooth = {
         }
     }
 };
+
+window.workoutScreen = {
+    lockLandscape: async function () {
+        try {
+            if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+            }
+            if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock("landscape");
+            }
+        } catch (e) {
+            console.warn("Orientation lock not supported or denied:", e);
+        }
+    },
+    unlockOrientation: async function () {
+        try {
+            if (screen.orientation && screen.orientation.unlock) {
+                screen.orientation.unlock();
+            }
+            if (document.exitFullscreen && document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+        } catch (e) { }
+    },
+    scrollToActiveStep: function (elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+};

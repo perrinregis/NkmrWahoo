@@ -85,20 +85,9 @@
                             </div>
                         </div>
 
-                        <!-- Mini profil visuel des intervalles -->
-                        <div class="w-full h-12 bg-base-300 rounded overflow-hidden flex items-end mt-4 p-0.5 gap-0.5 border border-base-content/10">
-                            @foreach (var step in workout.WorkoutStepsArray)
-                            {
-                                var ratio = step.IsRamp ? ((step.StartPower + step.EndPower) / 2.0) : step.Power;
-                                var color = step.GetZoneColor(ratio);
-                                var heightPct = Math.Clamp(ratio * 60, 15, 100);
-                                var widthFlex = Math.Max(step.Time, 5);
-
-                                <div style="flex-grow: @widthFlex; height: @heightPct%; background-color: @color;"
-                                     class="rounded-t-xs hover:brightness-125 transition-all cursor-pointer"
-                                     title="@step.GetZoneName(ratio) : @step.Time s à @Math.Round(ratio * 100)% FTP">
-                                </div>
-                            }
+                        <!-- Mini profil visuel des intervalles (avec rampes SVG) -->
+                        <div class="mt-4">
+                            <WorkoutProfileSvg Workout="@workout" HeightClass="h-12" />
                         </div>
 
                         <!-- Actions -->

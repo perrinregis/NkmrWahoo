@@ -1,0 +1,136 @@
+@namespace NkmrWahoo.Web.Components
+@using NkmrWahoo.Web.Models
+
+@if (Workout != null && Workout.WorkoutStepsArray.Count > 0)
+{
+    var totalTime = Math.Max(Workout.Time, Workout.WorkoutStepsArray.Sum(s => s.Time));
+    var maxRatio = Math.Max(1.4, Workout.WorkoutStepsArray.Max(s => Math.Max(s.Power, Math.Max(s.StartPower, s.EndPower))) * 1.1);
+    const double svgHeight = 100.0;
+    var currentX = 0.0;
+
+    <div class="w-full @HeightClass relative overflow-hidden rounded bg-base-300 select-none">
+        <svg viewBox="0 0 @totalTime @svgHeight" preserveAspectRatio="none" class="w-full h-full block">
+            <defs>
+                @for (int i = 0; i < Workout.WorkoutStepsArray.Count; i++)
+                {
+                    var s = Workout.WorkoutStepsArray[i];
+                    if (s.IsRamp)
+                    {
+                        var cStart = s.GetZoneColor(s.StartPower);
+                        var cEnd = s.GetZoneColor(s.EndPower);
+                        <linearGradient id="grad-@Workout.Id-@i" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="@cStart" />
+                            <stop offset="100%" stop-color="@cEnd" />
+                        </linearGradient>
+                    }
+                }
+            </defs>
+
+            <!-- Arrière-plan lignes de repère (100% FTP) -->
+            @{
+                var y100Ftp = svgHeight - (1.0 / maxRatio * svgHeight);
+            }
+            <line x1="0" y1="@y100Ftp" x2="@totalTime" y2="@y100Ftp" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="4,4" />
+
+            <!-- Intervalles (rectangles ou trapèzes dégradés) -->
+            @{
+                currentX = 0.0;
+                for (int i = 0; i < Workout.WorkoutStepsArray.Count; i++)
+                {
+                    var idx = i;
+                    var step = Workout.WorkoutStepsArray[idx];
+                    var stepWidth = (double)Math.Max(step.Time, 1);
+                    var isCurrent = (idx == CurrentStepIndex);
+                    var xStart = currentX;
+                    var xEnd = currentX + stepWidth;
+
+                    if (step.IsRamp)
+                    {
+                        var yStart = svgHeight - (Math.Clamp(step.StartPower, 0.05, maxRatio) / maxRatio * svgHeight);
+                        var yEnd = svgHeight - (Math.Clamp(step.EndPower, 0.05, maxRatio) / maxRatio * svgHeight);
+                        var points = $"{xStart.ToString(System.Globalization.CultureInfo.InvariantCulture)},{svgHeight} {xStart.ToString(System.Globalization.CultureInfo.InvariantCulture)},{yStart.ToString(System.Globalization.CultureInfo.InvariantCulture)} {xEnd.ToString(System.Globalization.CultureInfo.InvariantCulture)},{yEnd.ToString(System.Globalization.CultureInfo.InvariantCulture)} {xEnd.ToString(System.Globalization.CultureInfo.InvariantCulture)},{svgHeight}";
+
+                        <polygon points="@points"
+                                 fill="url(#grad-@Workout.Id-@idx)"
+                                 class="cursor-pointer transition-opacity @(isCurrent ? "opacity-100" : "opacity-75 hover:opacity-100")"
+                                 @onclick="() => HandleStepClick(idx)">
+                        </polygon>
+
+                        @if (isCurrent)
+                        {
+                            <!-- Contour surbrillance intervalle actif -->
+                            <polygon points="@points"
+                                     fill="none"
+                                     stroke="#ffffff"
+                                     stroke-width="@(Math.Max(2, totalTime / 400.0))"
+                                     class="pointer-events-none animate-pulse" />
+                        }
+                    }
+                    else
+                    {
+                        var ratio = Math.Clamp(step.Power, 0.05, maxRatio);
+                        var y = svgHeight - (ratio / maxRatio * svgHeight);
+                        var h = svgHeight - y;
+                        var color = step.GetZoneColor(step.Power);
+
+                        <rect x="@xStart.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              y="@y.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              width="@stepWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              height="@h.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              fill="@color"
+                              class="cursor-pointer transition-opacity @(isCurrent ? "opacity-100" : "opacity-75 hover:opacity-100")"
+                              @onclick="() => HandleStepClick(idx)">
+                        </rect>
+
+                        @if (isCurrent)
+                        {
+                            <!-- Contour surbrillance intervalle actif -->
+                            <rect x="@xStart.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                  y="@y.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                  width="@stepWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                  height="@h.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                  fill="none"
+                                  stroke="#ffffff"
+                                  stroke-width="@(Math.Max(2, totalTime / 400.0))"
+                                  class="pointer-events-none animate-pulse" />
+                        }
+                    }
+
+                    currentX += stepWidth;
+                }
+            }
+
+            <!-- Ligne de progression en temps réel (Curseur) -->
+            @if (ElapsedTotalSeconds > 0 && ElapsedTotalSeconds <= totalTime)
+            {
+                <line x1="@ElapsedTotalSeconds" y1="0" x2="@ElapsedTotalSeconds" y2="@svgHeight" stroke="#ffffff" stroke-width="@(Math.Max(3, totalTime / 300.0))" class="pointer-events-none shadow" />
+                <circle cx="@ElapsedTotalSeconds" cy="4" r="@(Math.Max(4, totalTime / 250.0))" fill="#ef4444" class="pointer-events-none" />
+            }
+        </svg>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public MyWhooshWorkout? Workout { get; set; }
+
+    [Parameter]
+    public int CurrentStepIndex { get; set; } = -1;
+
+    [Parameter]
+    public int ElapsedTotalSeconds { get; set; } = 0;
+
+    [Parameter]
+    public string HeightClass { get; set; } = "h-14";
+
+    [Parameter]
+    public EventCallback<int> OnStepClicked { get; set; }
+
+    private async Task HandleStepClick(int index)
+    {
+        if (OnStepClicked.HasDelegate)
+        {
+            await OnStepClicked.InvokeAsync(index);
+        }
+    }
+}
