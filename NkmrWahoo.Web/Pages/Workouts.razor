@@ -1,0 +1,209 @@
+@page "/workouts"
+@inject IWorkoutService WorkoutService
+@inject NavigationManager Navigation
+
+<PageTitle>Entraînements - NkmrWahoo</PageTitle>
+
+<div class="container mx-auto p-4 pb-24 max-w-4xl space-y-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight">Mes Entraînements</h1>
+            <p class="text-sm opacity-70">Importez vos fichiers MyWhoosh ou Zwift (.json) et roulez en mode ERG.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <label class="btn btn-primary cursor-pointer shadow">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Importer un JSON
+                <InputFile OnChange="HandleFileImport" accept=".json,.zwo" class="hidden" />
+            </label>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert @(isError ? "alert-error" : "alert-success") py-2 shadow-sm text-sm">
+            <span>@statusMessage</span>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="flex justify-center p-12">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+    }
+    else if (workouts.Count == 0)
+    {
+        <div class="card bg-base-100 border border-base-300 shadow-lg text-center p-8">
+            <div class="card-body items-center">
+                <div class="text-5xl mb-2">🚴‍♂️</div>
+                <h2 class="card-title text-xl">Aucun entraînement pour le moment</h2>
+                <p class="opacity-70 text-sm max-w-md">Vous pouvez importer un fichier d'entraînement MyWhoosh au format JSON depuis votre téléphone ou charger la séance d'exemple fournie.</p>
+                <div class="card-actions mt-4">
+                    <button class="btn btn-primary" @onclick="LoadSampleWorkout">Charger la séance Hard Starts 2</button>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 gap-4">
+            @foreach (var workout in workouts)
+            {
+                <div class="card bg-base-100 border border-base-300 shadow-md hover:shadow-lg transition-all">
+                    <div class="card-body p-5">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="card-title text-xl font-bold">@workout.Name</h2>
+                                    @if (!string.IsNullOrEmpty(workout.AuthorName))
+                                    {
+                                        <span class="badge badge-neutral badge-sm">@workout.AuthorName</span>
+                                    }
+                                </div>
+                                <p class="text-xs opacity-70 mt-1">@workout.Description</p>
+                            </div>
+
+                            <!-- Métriques rapides -->
+                            <div class="flex items-center gap-3 text-sm bg-base-200 py-1.5 px-3 rounded-lg flex-shrink-0">
+                                <div title="Durée totale">⏱️ <strong>@workout.FormattedTotalTime</strong></div>
+                                <div>•</div>
+                                <div title="Nombre d'intervalles">📊 <strong>@workout.StepCount</strong> paliers</div>
+                                @if (workout.TSS.HasValue && workout.TSS > 0)
+                                {
+                                    <div>•</div>
+                                    <div title="Training Stress Score">⚡ TSS <strong>@Math.Round(workout.TSS.Value, 1)</strong></div>
+                                }
+                                @if (workout.IF.HasValue && workout.IF > 0)
+                                {
+                                    <div>•</div>
+                                    <div title="Intensity Factor">🔥 IF <strong>@Math.Round(workout.IF.Value, 2)</strong></div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Mini profil visuel des intervalles -->
+                        <div class="w-full h-12 bg-base-300 rounded overflow-hidden flex items-end mt-4 p-0.5 gap-0.5 border border-base-content/10">
+                            @foreach (var step in workout.WorkoutStepsArray)
+                            {
+                                var ratio = step.IsRamp ? ((step.StartPower + step.EndPower) / 2.0) : step.Power;
+                                var color = step.GetZoneColor(ratio);
+                                var heightPct = Math.Clamp(ratio * 60, 15, 100);
+                                var widthFlex = Math.Max(step.Time, 5);
+
+                                <div style="flex-grow: @widthFlex; height: @heightPct%; background-color: @color;"
+                                     class="rounded-t-xs hover:brightness-125 transition-all cursor-pointer"
+                                     title="@step.GetZoneName(ratio) : @step.Time s à @Math.Round(ratio * 100)% FTP">
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="card-actions justify-between items-center mt-3 pt-2 border-t border-base-200">
+                            <button class="btn btn-ghost btn-sm text-error" @onclick="() => DeleteWorkout(workout.Id)">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Supprimer
+                            </button>
+
+                            <button class="btn btn-primary btn-md gap-2" @onclick="() => StartWorkout(workout.Id)">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Démarrer la séance
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<MyWhooshWorkout> workouts = new();
+    private bool isLoading = true;
+    private string statusMessage = "";
+    private bool isError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkouts();
+    }
+
+    private async Task LoadWorkouts()
+    {
+        isLoading = true;
+        try
+        {
+            workouts = await WorkoutService.GetWorkoutsAsync();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Erreur chargement : {ex.Message}";
+            isError = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleFileImport(InputFileChangeEventArgs e)
+    {
+        statusMessage = "";
+        isError = false;
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            // Limite de taille raisonnable (5MB)
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var jsonContent = await reader.ReadToEndAsync();
+
+            var imported = await WorkoutService.ImportFromJsonAsync(jsonContent);
+            if (imported != null)
+            {
+                statusMessage = $"Séance '{imported.Name}' importée avec succès ({imported.StepCount} paliers) !";
+                isError = false;
+                await LoadWorkouts();
+            }
+            else
+            {
+                statusMessage = "Erreur : Le fichier sélectionné ne semble pas être un JSON MyWhoosh valide.";
+                isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Erreur d'import : {ex.Message}";
+            isError = true;
+        }
+    }
+
+    private async Task LoadSampleWorkout()
+    {
+        await WorkoutService.ResetToSampleWorkoutAsync();
+        await LoadWorkouts();
+        statusMessage = "Séance d'exemple Hard Starts 2 chargée !";
+        isError = false;
+    }
+
+    private async Task DeleteWorkout(string id)
+    {
+        await WorkoutService.DeleteWorkoutAsync(id);
+        await LoadWorkouts();
+    }
+
+    private void StartWorkout(string id)
+    {
+        Navigation.NavigateTo($"/workout-player/{id}");
+    }
+}
