@@ -72,32 +72,40 @@ else
                         <span class="text-xs font-normal opacity-70 whitespace-nowrap">RPM</span>
                     </div>
 
-                    <!-- Bouton Pause & Bluetooth -->
-                    <div class="flex items-center gap-1.5 flex-none ml-auto">
+                    <!-- Boutons Connexion / Déconnexion & Play / Pause (Icônes Pures) -->
+                    <div class="flex items-center gap-1 sm:gap-1.5 flex-none ml-auto">
                         @if (isBtConnected)
                         {
-                            <span class="badge badge-success badge-xs gap-1 hidden sm:inline-flex text-[10px] py-2">
-                                <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                @(isMockMode ? "Mock" : "Wahoo")
-                            </span>
+                            <button class="btn btn-ghost btn-circle btn-xs text-success hover:bg-success/20 relative" @onclick="DisconnectBluetooth" title="@(isMockMode ? "Mock Connecté (cliquer pour déconnecter)" : "Bluetooth Connecté (cliquer pour déconnecter)")">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" />
+                                </svg>
+                                <span class="absolute top-0 right-0 block h-1.5 w-1.5 rounded-full ring-1 ring-base-100 bg-success"></span>
+                            </button>
                         }
                         else
                         {
-                            <button class="btn btn-warning btn-xs" @onclick="() => ConnectBluetooth(false)">
-                                📡 Connecter
+                            <button class="btn btn-ghost btn-circle btn-xs text-base-content/40 hover:text-primary hover:bg-base-200" @onclick="() => ConnectBluetooth(false)" title="Connecter le home-trainer Bluetooth">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7l10 10-5 5V2l5 5L7 17" />
+                                </svg>
                             </button>
                         }
 
                         @if (isRunning)
                         {
-                            <button class="btn btn-warning btn-xs sm:btn-sm gap-1" @onclick="PauseWorkout" title="Mettre en pause">
-                                ⏸ <span class="hidden sm:inline">Pause</span>
+                            <button class="btn btn-warning btn-circle btn-xs sm:btn-sm shadow" @onclick="PauseWorkout" title="Mettre en pause">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                </svg>
                             </button>
                         }
                         else
                         {
-                            <button class="btn btn-success btn-xs sm:btn-sm gap-1" @onclick="StartWorkout" title="Lancer / Reprendre">
-                                ▶ <span class="hidden sm:inline">Reprendre</span>
+                            <button class="btn btn-success btn-circle btn-xs sm:btn-sm shadow" @onclick="StartWorkout" title="Reprendre la séance">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
                             </button>
                         }
 
@@ -170,16 +178,14 @@ else
                         <span class="opacity-70 text-[11px] hidden sm:inline">Paliers</span>
                     </div>
 
-                    <!-- Milieu : Temps restant & Puissance cumulée -->
+                    <!-- Milieu : Temps restant / Temps total & Puissance cumulée (sans textes superflus) -->
                     <div class="flex items-center justify-center gap-3 sm:gap-6 text-xs font-semibold whitespace-nowrap">
-                        <div class="flex items-center gap-1.5">
-                            <span class="opacity-60 text-[10px] uppercase font-bold">Temps restant :</span>
-                            <span class="font-mono font-black text-sm sm:text-base text-accent whitespace-nowrap">@FormatTime(totalRemainingSeconds)</span>
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="opacity-60 text-[10px] uppercase font-bold">Puissance cumulée :</span>
-                            <span class="font-black text-sm sm:text-base text-primary whitespace-nowrap">@totalKj&nbsp;kJ</span>
-                        </div>
+                        <span class="font-mono font-black text-xs sm:text-sm text-accent whitespace-nowrap" title="Temps restant / Temps total">
+                            @FormatTime(totalRemainingSeconds)/@FormatTime(workout.Time)
+                        </span>
+                        <span class="font-black text-xs sm:text-sm text-primary whitespace-nowrap" title="Puissance cumulée">
+                            @totalKj&nbsp;kJ
+                        </span>
                     </div>
 
                     <!-- Droite : Plein écran (icône bascule) & Quitter (icône sortie) -->
@@ -378,6 +384,10 @@ else
         stepRemainingSeconds = currentStep!.Time;
         activeMessage = "";
 
+        // Recalculer le temps total écoulé et le temps restant selon le palier sélectionné
+        totalElapsedSeconds = workout.WorkoutStepsArray.Take(stepIndex).Sum(s => s.Time);
+        totalRemainingSeconds = Math.Max(0, workout.Time - totalElapsedSeconds);
+
         UpdateTargetPower(forceSendToTrainer: true);
 
         _ = JSRuntime.InvokeVoidAsync("workoutScreen.scrollToActiveStep", $"step-row-{stepIndex}");
@@ -533,6 +543,16 @@ else
         {
             Console.WriteLine($"Erreur BT : {ex.Message}");
         }
+    }
+
+    private async Task DisconnectBluetooth()
+    {
+        isBtConnected = false;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("wahooBluetooth.disconnect");
+        }
+        catch { }
     }
 
     [JSInvokable]

@@ -101,7 +101,7 @@
             }
 
             <!-- Ligne de progression en temps réel (Curseur) -->
-            @if (ElapsedTotalSeconds > 0 && ElapsedTotalSeconds <= totalTime)
+            @if (ElapsedTotalSeconds >= 0 && ElapsedTotalSeconds <= totalTime)
             {
                 <line x1="@ElapsedTotalSeconds" y1="0" x2="@ElapsedTotalSeconds" y2="@svgHeight" stroke="#ffffff" stroke-width="@(Math.Max(3, totalTime / 300.0))" class="pointer-events-none shadow" />
                 <circle cx="@ElapsedTotalSeconds" cy="4" r="@(Math.Max(4, totalTime / 250.0))" fill="#ef4444" class="pointer-events-none" />
