@@ -3,15 +3,23 @@ window.wahooBluetooth = {
     server: null,
     powerCharacteristic: null,
     controlPointCharacteristic: null,
+    indoorBikeCharacteristic: null,
     isMock: false,
     mockInterval: null,
     mockTargetPower: 150,
     
+    // Suivi précis de la cadence
     lastCrankRevs: undefined,
     lastCrankTime: undefined,
+    lastCrankEventTimestamp: 0,
+    lastCadenceSent: 0,
+    cadenceWatchdog: null,
     
     connect: async function (dotNetHelper, useMock = false) {
         this.isMock = useMock;
+        
+        // Nettoyage préalable
+        this.resetCadenceState();
         
         if (useMock) {
             console.log("Démarrage du mode simulation (Mock)...");
@@ -23,7 +31,6 @@ window.wahooBluetooth = {
                 if (current < 0) current = 0;
                 dotNetHelper.invokeMethodAsync('UpdatePower', current);
                 
-                // Simule une cadence (env 80-90)
                 let mockCadence = Math.round(70 + (current / 10) + (Math.random() * 4 - 2));
                 dotNetHelper.invokeMethodAsync('UpdateCadence', mockCadence);
             }, 1000);
@@ -41,6 +48,7 @@ window.wahooBluetooth = {
             console.log("Connecting to GATT Server...");
             this.server = await this.device.gatt.connect();
 
+            // 1. Service Cycling Power (Watts + Cadence par révolutions de manivelle)
             try {
                 console.log("Getting Cycling Power Service...");
                 const cpService = await this.server.getPrimaryService('cycling_power');
@@ -53,52 +61,103 @@ window.wahooBluetooth = {
                     let power = value.getInt16(2, true);
                     dotNetHelper.invokeMethodAsync('UpdatePower', power);
 
-                    // Parse Cadence (Crank Revolution Data)
+                    // Décalage pour trouver les données de manivelle (Crank Revolution Data)
                     let offset = 4;
                     if ((flags & 1) !== 0) offset += 1; // Pedal Power Balance
                     if ((flags & 4) !== 0) offset += 2; // Accumulated Torque
                     if ((flags & 16) !== 0) offset += 6; // Wheel Revolution Data
 
-                    if ((flags & 32) !== 0) { // Crank Revolution Data present
+                    if ((flags & 32) !== 0) { // Crank Revolution Data présent
                         let crankRevs = value.getUint16(offset, true);
                         let crankTime = value.getUint16(offset + 2, true);
+                        let now = Date.now();
                         
-                        if (window.wahooBluetooth.lastCrankTime !== undefined) {
-                            let timeDiff = crankTime - window.wahooBluetooth.lastCrankTime;
-                            if (timeDiff < 0) timeDiff += 65536; // Handle overflow
+                        if (this.lastCrankTime !== undefined) {
+                            let timeDiff = crankTime - this.lastCrankTime;
+                            if (timeDiff < 0) timeDiff += 65536; // Résolution 1/1024s (overflow 16-bit)
                             
-                            let revDiff = crankRevs - window.wahooBluetooth.lastCrankRevs;
+                            let revDiff = crankRevs - this.lastCrankRevs;
                             if (revDiff < 0) revDiff += 65536;
 
-                            if (timeDiff > 0) {
+                            if (revDiff > 0 && timeDiff > 0) {
+                                // Pédalage actif détecté
                                 let cadence = Math.round((revDiff * 1024 * 60) / timeDiff);
-                                if (cadence >= 0 && cadence < 300) {
+                                if (cadence > 0 && cadence < 250) {
+                                    this.lastCrankEventTimestamp = now;
+                                    this.lastCadenceSent = cadence;
                                     dotNetHelper.invokeMethodAsync('UpdateCadence', cadence);
                                 }
+                                this.lastCrankRevs = crankRevs;
+                                this.lastCrankTime = crankTime;
+                            } else {
+                                // Pas de nouveau tour de pédale (revDiff == 0 ou timeDiff == 0)
+                                let elapsed = now - this.lastCrankEventTimestamp;
+                                // Si arrêt de pédalage depuis plus de 1.2s ou puissance à 0 depuis plus de 800ms
+                                if (elapsed > 1200 || (power === 0 && elapsed > 800)) {
+                                    if (this.lastCadenceSent !== 0) {
+                                        this.lastCadenceSent = 0;
+                                        dotNetHelper.invokeMethodAsync('UpdateCadence', 0);
+                                    }
+                                }
                             }
+                        } else {
+                            this.lastCrankRevs = crankRevs;
+                            this.lastCrankTime = crankTime;
+                            this.lastCrankEventTimestamp = now;
                         }
-                        
-                        window.wahooBluetooth.lastCrankRevs = crankRevs;
-                        window.wahooBluetooth.lastCrankTime = crankTime;
                     }
                 });
             } catch (e) {
                 console.warn("Cycling power service not available:", e);
             }
 
-            // 2. Try to get FTMS Control Point for ERG mode
+            // 2. Service Fitness Machine (FTMS) pour contrôle ERG et cadence directe si dispo
             try {
                 console.log("Getting Fitness Machine Service...");
                 const ftmsService = await this.server.getPrimaryService('fitness_machine');
-                this.controlPointCharacteristic = await ftmsService.getCharacteristic('fitness_machine_control_point');
                 
-                // Op code 0x00 : Request Control
+                // Point de contrôle ERG
+                this.controlPointCharacteristic = await ftmsService.getCharacteristic('fitness_machine_control_point');
                 console.log("Requesting FTMS control...");
-                await this.controlPointCharacteristic.writeValue(new Uint8Array([0x00]));
+                await this.controlPointCharacteristic.writeValue(new Uint8Array([0x00])); // 0x00 : Request Control
                 console.log("FTMS control granted.");
+
+                // Essai d'écoute de la cadence instantanée native FTMS (indoor_bike_data)
+                try {
+                    this.indoorBikeCharacteristic = await ftmsService.getCharacteristic('indoor_bike_data');
+                    await this.indoorBikeCharacteristic.startNotifications();
+                    this.indoorBikeCharacteristic.addEventListener('characteristicvaluechanged', (evt) => {
+                        let val = evt.target.value;
+                        let f = val.getUint16(0, true);
+                        let off = 2;
+                        if ((f & 1) === 0) off += 2; // Instantaneous Speed
+                        if ((f & 2) !== 0) off += 2; // Average Speed
+                        if ((f & 4) !== 0) { // Instantaneous Cadence présent (0.5 RPM)
+                            let instantCadence = Math.round(val.getUint16(off, true) * 0.5);
+                            this.lastCrankEventTimestamp = Date.now();
+                            this.lastCadenceSent = instantCadence;
+                            dotNetHelper.invokeMethodAsync('UpdateCadence', instantCadence);
+                        }
+                    });
+                    console.log("FTMS Indoor Bike Data cadence actif.");
+                } catch(err) {
+                    console.log("FTMS Indoor Bike Data non requis ou indisponible, calcul via CrankRevs actif.");
+                }
             } catch(e) {
-                console.warn("FTMS control point not available:", e);
+                console.warn("FTMS service not available:", e);
             }
+
+            // 3. Watchdog actif : vérifie toutes les 250ms si le cycliste a arrêté de pédaler
+            if (this.cadenceWatchdog) clearInterval(this.cadenceWatchdog);
+            this.cadenceWatchdog = setInterval(() => {
+                let now = Date.now();
+                if (this.lastCrankEventTimestamp > 0 && (now - this.lastCrankEventTimestamp > 1400)) {
+                    if (this.lastCadenceSent !== 0) {
+                        this.lastCadenceSent = 0;
+                        dotNetHelper.invokeMethodAsync('UpdateCadence', 0);
+                    }
+                }
+            }, 250);
 
             console.log("Connected.");
             return "Connecté avec succès";
@@ -106,6 +165,17 @@ window.wahooBluetooth = {
             console.error("Bluetooth connection failed", error);
             return error.toString();
         }
+    },
+
+    resetCadenceState: function () {
+        if (this.cadenceWatchdog) {
+            clearInterval(this.cadenceWatchdog);
+            this.cadenceWatchdog = null;
+        }
+        this.lastCrankRevs = undefined;
+        this.lastCrankTime = undefined;
+        this.lastCrankEventTimestamp = 0;
+        this.lastCadenceSent = 0;
     },
 
     setTargetPower: async function (power) {
@@ -136,6 +206,8 @@ window.wahooBluetooth = {
     },
 
     disconnect: function () {
+        this.resetCadenceState();
+
         if (this.isMock) {
             if (this.mockInterval) clearInterval(this.mockInterval);
             console.log("SIMULATEUR: Disconnected");
