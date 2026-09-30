@@ -223,6 +223,49 @@ window.wahooBluetooth = {
 };
 
 window.workoutScreen = {
+    wakeLock: null,
+    wakeLockRequested: false,
+    _visibilityBound: false,
+
+    requestWakeLock: async function () {
+        this.wakeLockRequested = true;
+        try {
+            if ('wakeLock' in navigator) {
+                if (!this.wakeLock || this.wakeLock.released) {
+                    this.wakeLock = await navigator.wakeLock.request('screen');
+                    this.wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock relâché');
+                    });
+                    console.log('Screen Wake Lock actif : écran maintenu allumé.');
+                }
+            } else {
+                console.warn('Screen Wake Lock API non supportée sur ce navigateur.');
+            }
+        } catch (err) {
+            console.warn('Screen Wake Lock refusé ou erreur:', err);
+        }
+
+        if (!this._visibilityBound) {
+            this._visibilityBound = true;
+            document.addEventListener('visibilitychange', async () => {
+                if (this.wakeLockRequested && document.visibilityState === 'visible') {
+                    await this.requestWakeLock();
+                }
+            });
+        }
+    },
+
+    releaseWakeLock: function () {
+        this.wakeLockRequested = false;
+        if (this.wakeLock !== null) {
+            try {
+                this.wakeLock.release();
+            } catch (e) { }
+            this.wakeLock = null;
+            console.log('Screen Wake Lock désactivé.');
+        }
+    },
+
     lockLandscape: async function () {
         try {
             if (document.documentElement.requestFullscreen && !document.fullscreenElement) {

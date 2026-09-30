@@ -351,6 +351,7 @@ else
             try
             {
                 await JSRuntime.InvokeVoidAsync("workoutScreen.lockLandscape");
+                await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
             }
             catch { }
         }
@@ -361,6 +362,7 @@ else
         try
         {
             await JSRuntime.InvokeVoidAsync("workoutScreen.lockLandscape");
+            await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
             isFullscreen = true;
         }
         catch { }
@@ -416,6 +418,12 @@ else
         if (isRunning) return;
 
         isRunning = true;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
+        }
+        catch { }
+
         timerCts = new CancellationTokenSource();
         periodicTimer = new System.Threading.PeriodicTimer(TimeSpan.FromSeconds(1));
 
@@ -581,6 +589,7 @@ else
         PauseWorkout();
         try
         {
+            await JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
             await JSRuntime.InvokeVoidAsync("workoutScreen.unlockOrientation");
         }
         catch { }
@@ -590,6 +599,11 @@ else
     public void Dispose()
     {
         PauseWorkout();
+        try
+        {
+            _ = JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
+        }
+        catch { }
         dotNetHelper?.Dispose();
     }
 }
