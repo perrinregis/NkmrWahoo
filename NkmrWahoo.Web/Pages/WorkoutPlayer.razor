@@ -117,14 +117,9 @@ else
             </header>
 
             <!-- 2. SCÈNE CENTRALE (Route & Messages Coaching) -->
-            <div class="flex-1 flex flex-col justify-between p-3 relative overflow-hidden bg-gradient-to-b from-base-200 to-base-300">
-                <!-- Décor visuel de route stylisée (Espace pour future animation 3D/Canvas) -->
-                <div class="absolute inset-0 flex flex-col justify-end pointer-events-none opacity-20">
-                    <svg viewBox="0 0 1000 300" preserveAspectRatio="none" class="w-full h-36">
-                        <polygon points="450,0 550,0 900,300 100,300" fill="currentColor" />
-                        <line x1="500" y1="0" x2="500" y2="300" stroke="white" stroke-width="4" stroke-dasharray="20,15" />
-                    </svg>
-                </div>
+            <div class="flex-1 flex flex-col justify-between p-3 relative overflow-hidden bg-[#05060f]">
+                <!-- Canvas Tron 3D Cyber Highway -->
+                <canvas id="tron-highway-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
 
                 <!-- Messages de coaching géants au centre de l'attention -->
                 <div class="z-10 flex flex-col items-center justify-center flex-1">
@@ -136,10 +131,8 @@ else
                     }
                     else
                     {
-                        <div class="text-center opacity-40 select-none">
-                            <div class="text-3xl mb-1">🚴‍♂️</div>
-                            <div class="text-[10px] uppercase tracking-widest font-bold">Zone @currentStep?.GetZoneName(currentTargetRatio)</div>
-                            <div class="text-xs">Maintenez le rythme et la cadence</div>
+                        <div class="text-center select-none backdrop-blur-md bg-black/40 px-3 py-1 rounded-full border border-white/10 text-white/80 shadow-lg">
+                            <span class="text-xs font-bold tracking-wider uppercase">Zone @currentStep?.GetZoneName(currentTargetRatio)</span>
                         </div>
                     }
                 </div>
@@ -147,7 +140,7 @@ else
                 <!-- Indicateur rapide palier suivant en bas de zone centrale -->
                 @if (nextStep != null)
                 {
-                    <div class="z-10 bg-base-100/70 backdrop-blur rounded-md py-0.5 px-2 text-[11px] self-start flex items-center gap-1.5 border border-base-content/10">
+                    <div class="z-10 bg-black/60 backdrop-blur-md rounded-md py-0.5 px-2 text-[11px] self-start flex items-center gap-1.5 border border-white/10 text-white">
                         <span class="opacity-60">À suivre :</span>
                         <span class="w-2 h-2 rounded-full" style="background-color: @nextStep.GetZoneColor(nextStep.IsRamp ? nextStep.StartPower : nextStep.Power)"></span>
                         <strong>@Math.Round((nextStep.IsRamp ? nextStep.StartPower : nextStep.Power) * userFtp) W</strong>
@@ -352,9 +345,22 @@ else
             {
                 await JSRuntime.InvokeVoidAsync("workoutScreen.lockLandscape");
                 await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
+                await JSRuntime.InvokeVoidAsync("tronHighway.init", "tron-highway-canvas");
+                await UpdateTronHighway();
             }
             catch { }
         }
+    }
+
+    private async Task UpdateTronHighway()
+    {
+        if (workout == null) return;
+        try
+        {
+            var zoneHex = currentStep?.GetZoneColor(currentTargetRatio) ?? "#38bdf8";
+            await JSRuntime.InvokeVoidAsync("tronHighway.update", speedKmh, currentCadence, currentTargetRatio, currentPower, isRunning, zoneHex);
+        }
+        catch { }
     }
 
     private async Task ForceLandscape()
@@ -391,6 +397,7 @@ else
         totalRemainingSeconds = Math.Max(0, workout.Time - totalElapsedSeconds);
 
         UpdateTargetPower(forceSendToTrainer: true);
+        _ = UpdateTronHighway();
 
         _ = JSRuntime.InvokeVoidAsync("workoutScreen.scrollToActiveStep", $"step-row-{stepIndex}");
     }
@@ -410,6 +417,7 @@ else
             {
                 _ = JSRuntime.InvokeAsync<bool>("wahooBluetooth.setTargetPower", currentTargetWatts);
             }
+            _ = UpdateTronHighway();
         }
     }
 
@@ -428,6 +436,7 @@ else
         periodicTimer = new System.Threading.PeriodicTimer(TimeSpan.FromSeconds(1));
 
         UpdateTargetPower(forceSendToTrainer: true);
+        _ = UpdateTronHighway();
 
         _ = RunWorkoutLoop(timerCts.Token);
     }
@@ -438,6 +447,7 @@ else
         timerCts?.Cancel();
         periodicTimer?.Dispose();
         periodicTimer = null;
+        _ = UpdateTronHighway();
 
         if (isBtConnected)
         {
@@ -498,6 +508,7 @@ else
                 }
             }
 
+            _ = UpdateTronHighway();
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -530,6 +541,7 @@ else
     {
         intensityBias = Math.Clamp(intensityBias + delta, 50, 150);
         UpdateTargetPower(forceSendToTrainer: true);
+        _ = UpdateTronHighway();
     }
 
     private async Task ConnectBluetooth(bool useMock)
@@ -567,6 +579,7 @@ else
     public void UpdatePower(int power)
     {
         currentPower = power;
+        _ = UpdateTronHighway();
         StateHasChanged();
     }
 
@@ -574,6 +587,7 @@ else
     public void UpdateCadence(int cadence)
     {
         currentCadence = cadence;
+        _ = UpdateTronHighway();
         StateHasChanged();
     }
 
@@ -589,6 +603,7 @@ else
         PauseWorkout();
         try
         {
+            await JSRuntime.InvokeVoidAsync("tronHighway.dispose");
             await JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
             await JSRuntime.InvokeVoidAsync("workoutScreen.unlockOrientation");
         }
@@ -601,6 +616,7 @@ else
         PauseWorkout();
         try
         {
+            _ = JSRuntime.InvokeVoidAsync("tronHighway.dispose");
             _ = JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
         }
         catch { }
