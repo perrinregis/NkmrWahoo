@@ -744,6 +744,9 @@ window.workoutHost = {
     init: function (dotNetHelper) {
         this.dotNetHelper = dotNetHelper;
         if (this.peer && !this.peer.destroyed) {
+            if (this.peer.disconnected) {
+                this.peer.reconnect();
+            }
             if (this.peerId && this.remoteUrl && this.dotNetHelper) {
                 this.dotNetHelper.invokeMethodAsync('OnHostPeerReady', this.peerId, this.remoteUrl);
             }
@@ -754,7 +757,18 @@ window.workoutHost = {
         const hostId = "nkmr-" + sessionPin;
 
         try {
-            this.peer = new Peer(hostId, { debug: 1 });
+            this.peer = new Peer(hostId, {
+                debug: 1,
+                pingInterval: 5000,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' }
+                    ]
+                }
+            });
 
             this.peer.on('open', (id) => {
                 this.peerId = id;
@@ -767,33 +781,52 @@ window.workoutHost = {
                 }
             });
 
+            this.peer.on('disconnected', () => {
+                console.log("Host PeerJS déconnecté, reconnexion...");
+                if (this.peer && !this.peer.destroyed) {
+                    this.peer.reconnect();
+                }
+            });
+
             this.peer.on('connection', (connection) => {
                 console.log("Connexion reçue d'un smartphone compagnon !");
                 this.conn = connection;
 
-                this.conn.on('open', () => {
+                const setupConn = () => {
                     console.log("Canal de données compagnon ouvert !");
                     if (this.dotNetHelper) {
                         this.dotNetHelper.invokeMethodAsync('OnCompanionConnected');
                     }
-                });
+                };
 
-                this.conn.on('data', (data) => {
+                if (connection.open) {
+                    setupConn();
+                } else {
+                    connection.on('open', setupConn);
+                }
+
+                connection.on('data', (data) => {
                     console.log("Commande reçue du smartphone :", data);
-                    if (this.dotNetHelper && data) {
+                    if (data && data.action === 'getState') {
+                        if (this.dotNetHelper) {
+                            this.dotNetHelper.invokeMethodAsync('OnRequestState');
+                        }
+                    } else if (this.dotNetHelper && data) {
                         this.dotNetHelper.invokeMethodAsync('OnRemoteCommand', JSON.stringify(data));
                     }
                 });
 
-                this.conn.on('close', () => {
+                connection.on('close', () => {
                     console.log("Smartphone compagnon déconnecté.");
-                    this.conn = null;
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnCompanionDisconnected');
+                    if (this.conn === connection) {
+                        this.conn = null;
+                        if (this.dotNetHelper) {
+                            this.dotNetHelper.invokeMethodAsync('OnCompanionDisconnected');
+                        }
                     }
                 });
 
-                this.conn.on('error', (err) => {
+                connection.on('error', (err) => {
                     console.warn("Erreur connexion compagnon :", err);
                 });
             });
@@ -863,53 +896,93 @@ window.workoutRemote = {
     peer: null,
     conn: null,
     dotNetHelper: null,
+    targetHostId: null,
 
     connect: function (dotNetHelper, hostId) {
-        this.dotNetHelper = dotNetHelper;
         this.dispose();
+        this.dotNetHelper = dotNetHelper;
+        this.targetHostId = hostId;
 
         try {
-            this.peer = new Peer({ debug: 1 });
+            this.peer = new Peer({
+                debug: 1,
+                pingInterval: 5000,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' }
+                    ]
+                }
+            });
 
             this.peer.on('open', (id) => {
                 console.log("Remote PeerJS ouvert avec id :", id);
-                console.log("Tentative de connexion à l'hôte :", hostId);
-                this.conn = this.peer.connect(hostId, { reliable: true });
+                this.setupConnection(hostId);
+            });
 
-                this.conn.on('open', () => {
-                    console.log("Connecté avec succès à l'hôte PC !");
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnConnectedToHost');
-                    }
-                });
-
-                this.conn.on('data', (data) => {
-                    if (this.dotNetHelper && data) {
-                        this.dotNetHelper.invokeMethodAsync('OnStateReceived', JSON.stringify(data));
-                    }
-                });
-
-                this.conn.on('close', () => {
-                    console.log("Connexion avec l'hôte PC fermée.");
-                    if (this.dotNetHelper) {
-                        this.dotNetHelper.invokeMethodAsync('OnDisconnectedFromHost');
-                    }
-                });
-
-                this.conn.on('error', (err) => {
-                    console.warn("Erreur de connexion télécommande :", err);
-                });
+            this.peer.on('disconnected', () => {
+                console.log("Remote PeerJS déconnecté, reconnexion...");
+                if (this.peer && !this.peer.destroyed) {
+                    this.peer.reconnect();
+                }
             });
 
             this.peer.on('error', (err) => {
                 console.warn("Erreur PeerJS Télécommande :", err);
                 if (this.dotNetHelper) {
-                    this.dotNetHelper.invokeMethodAsync('OnRemoteError', err.type || err.message || "Erreur de connexion");
+                    let msg = "Erreur de connexion";
+                    if (err.type === 'peer-unavailable') {
+                        msg = "Séance introuvable (" + hostId + "). Vérifiez que la séance est active sur le PC.";
+                    } else if (err.type === 'network') {
+                        msg = "Problème réseau. Vérifiez votre connexion internet.";
+                    }
+                    this.dotNetHelper.invokeMethodAsync('OnRemoteError', msg);
                 }
             });
         } catch (e) {
             console.error("Erreur lancement télécommande :", e);
         }
+    },
+
+    setupConnection: function (hostId) {
+        if (!this.peer || this.peer.destroyed) return;
+        console.log("Tentative de connexion à l'hôte :", hostId);
+
+        const conn = this.peer.connect(hostId);
+        this.conn = conn;
+
+        const onOpen = () => {
+            console.log("Connecté avec succès à l'hôte PC !");
+            if (this.dotNetHelper) {
+                this.dotNetHelper.invokeMethodAsync('OnConnectedToHost');
+            }
+            conn.send({ action: "getState" });
+        };
+
+        if (conn.open) {
+            onOpen();
+        } else {
+            conn.on('open', onOpen);
+        }
+
+        conn.on('data', (data) => {
+            if (this.dotNetHelper && data) {
+                this.dotNetHelper.invokeMethodAsync('OnStateReceived', JSON.stringify(data));
+            }
+        });
+
+        conn.on('close', () => {
+            console.log("Connexion avec l'hôte PC fermée.");
+            if (this.conn === conn && this.dotNetHelper) {
+                this.dotNetHelper.invokeMethodAsync('OnDisconnectedFromHost');
+            }
+        });
+
+        conn.on('error', (err) => {
+            console.warn("Erreur de connexion télécommande :", err);
+        });
     },
 
     sendCommand: function (cmdJson) {

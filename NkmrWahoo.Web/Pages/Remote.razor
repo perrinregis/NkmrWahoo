@@ -67,8 +67,15 @@
                            placeholder="ex: 123456" 
                            @bind="manualHostId" 
                            @onkeyup="@(async e => { if (e.Key == "Enter") await ConnectManual(); })" />
-                    <button class="btn btn-primary join-item font-bold" @onclick="ConnectManual">
-                        Connexion
+                    <button class="btn btn-primary join-item font-bold" @onclick="ConnectManual" disabled="@isConnecting">
+                        @if (isConnecting)
+                        {
+                            <span class="loading loading-spinner loading-xs"></span>
+                        }
+                        else
+                        {
+                            <span>Connexion</span>
+                        }
                     </button>
                 </div>
                 @if (!string.IsNullOrEmpty(targetHostId))
@@ -180,6 +187,7 @@
 @code {
     private DotNetObjectReference<Remote>? dotNetHelper;
     private bool isConnected = false;
+    private bool isConnecting = false;
     private string targetHostId = "";
     private string manualHostId = "";
     private string errorMessage = "";
@@ -253,6 +261,8 @@
     private async Task ConnectToHost(string hostId)
     {
         errorMessage = "";
+        isConnecting = true;
+        StateHasChanged();
         try
         {
             await JSRuntime.InvokeVoidAsync("workoutRemote.connect", dotNetHelper, hostId);
@@ -260,6 +270,8 @@
         catch (Exception ex)
         {
             errorMessage = ex.Message;
+            isConnecting = false;
+            StateHasChanged();
         }
     }
 
@@ -281,6 +293,7 @@
     public void OnConnectedToHost()
     {
         isConnected = true;
+        isConnecting = false;
         errorMessage = "";
         StateHasChanged();
     }
@@ -289,6 +302,7 @@
     public void OnDisconnectedFromHost()
     {
         isConnected = false;
+        isConnecting = false;
         errorMessage = "Déconnecté du PC. Tentative de reconnexion...";
         StateHasChanged();
     }
@@ -296,6 +310,7 @@
     [JSInvokable]
     public void OnRemoteError(string error)
     {
+        isConnecting = false;
         errorMessage = error;
         StateHasChanged();
     }

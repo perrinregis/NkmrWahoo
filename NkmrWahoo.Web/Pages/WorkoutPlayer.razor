@@ -804,9 +804,15 @@ else
         catch { }
     }
 
+    [JSInvokable]
+    public void OnRequestState()
+    {
+        BroadcastStateToCompanion();
+    }
+
     private void BroadcastStateToCompanion()
     {
-        if (!isCompanionConnected || workout == null) return;
+        if (workout == null) return;
         try
         {
             var stateObj = new
