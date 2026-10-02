@@ -159,6 +159,17 @@ else
                                    HeightClass="h-12 sm:h-14"
                                    OnStepClicked="JumpToStep" />
 
+                <!-- Ligne orange de progression EN DESSOUS de la frise (de gauche jusqu'à où on est) -->
+                @{
+                    var totalTimeSec = Math.Max(workout.Time, 1);
+                    var progressPct = Math.Clamp((double)totalElapsedSeconds / totalTimeSec * 100.0, 0.0, 100.0);
+                }
+                <div class="w-full bg-base-content/10 h-1.5 rounded-full overflow-hidden flex-none">
+                    <div class="h-full rounded-full transition-all duration-300 shadow-sm"
+                         style="background-color: #ff5500; width: @progressPct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%;">
+                    </div>
+                </div>
+
                 <!-- Contrôles rapides sous la frise avec Temps Restant et Puissance Cumulée au milieu -->
                 <div class="flex items-center justify-between text-xs px-1 gap-2 whitespace-nowrap">
                     <!-- Gauche : Saut de paliers -->
