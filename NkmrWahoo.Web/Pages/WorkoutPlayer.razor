@@ -121,18 +121,19 @@ else
                 <!-- Canvas Tron 3D Cyber Highway -->
                 <canvas id="tron-highway-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
 
-                <!-- Messages de coaching géants au centre de l'attention -->
-                <div class="z-10 flex flex-col items-center justify-center flex-1">
+                <!-- EN HAUT : Badge discret de Zone (placé en haut pour dégager la perspective 3D) -->
+                <div class="z-10 flex justify-center w-full pointer-events-none">
+                    <div class="text-center select-none backdrop-blur-md bg-black/50 px-3 py-0.5 rounded-full border border-white/10 text-white/90 shadow-lg">
+                        <span class="text-[11px] sm:text-xs font-bold tracking-wider uppercase">@currentStep?.GetZoneName(currentTargetRatio)</span>
+                    </div>
+                </div>
+
+                <!-- AU CENTRE : Uniquement les messages de coaching alertes -->
+                <div class="z-10 flex flex-col items-center justify-center flex-1 pointer-events-none">
                     @if (!string.IsNullOrEmpty(activeMessage))
                     {
-                        <div class="alert alert-info shadow-2xl py-3 px-5 max-w-lg text-center text-base sm:text-lg font-bold animate-bounce border-2 border-white/40 backdrop-blur-md bg-info/90 text-info-content">
+                        <div class="alert alert-info shadow-2xl py-3 px-5 max-w-lg text-center text-base sm:text-lg font-bold animate-bounce border-2 border-white/40 backdrop-blur-md bg-info/90 text-info-content pointer-events-auto">
                             <span>💬 @activeMessage</span>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center select-none backdrop-blur-md bg-black/40 px-3 py-1 rounded-full border border-white/10 text-white/80 shadow-lg">
-                            <span class="text-xs font-bold tracking-wider uppercase">Zone @currentStep?.GetZoneName(currentTargetRatio)</span>
                         </div>
                     }
                 </div>
@@ -358,7 +359,7 @@ else
         try
         {
             var zoneHex = currentStep?.GetZoneColor(currentTargetRatio) ?? "#38bdf8";
-            await JSRuntime.InvokeVoidAsync("tronHighway.update", speedKmh, currentCadence, currentTargetRatio, currentPower, isRunning, zoneHex);
+            await JSRuntime.InvokeVoidAsync("tronHighway.update", speedKmh, currentCadence, currentTargetRatio, currentPower, isRunning, zoneHex, currentTargetWatts, stepRemainingSeconds);
         }
         catch { }
     }

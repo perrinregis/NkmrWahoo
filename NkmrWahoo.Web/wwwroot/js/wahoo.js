@@ -345,6 +345,8 @@ window.tronHighway = {
     power: 0,
     isRunning: false,
     slopePercent: 0,
+    targetWatts: 0,
+    remainingSeconds: 999,
 
     init: function (canvasId) {
         this.dispose();
@@ -378,10 +380,12 @@ window.tronHighway = {
         }
     },
 
-    update: function (speedKmh, cadence, targetRatio, currentPower, isRunning, zoneColorHex) {
+    update: function (speedKmh, cadence, targetRatio, currentPower, isRunning, zoneColorHex, targetWatts, remainingSeconds) {
         this.cadence = cadence || 0;
         this.power = currentPower || 0;
         this.isRunning = isRunning;
+        this.targetWatts = targetWatts || 0;
+        this.remainingSeconds = (remainingSeconds !== undefined) ? remainingSeconds : 999;
 
         // Vitesse d'animation : réelle ou basée sur cadence
         let spd = speedKmh || 0;
@@ -616,11 +620,14 @@ window.tronHighway = {
         ctx.setLineDash([]);
         ctx.restore();
 
-        // 9. Portiques / Arches cybernétiques overhead
-        const archSpacing = 160;
+        // 9. Portiques / Arches cybernétiques (Losanges Tron)
+        const isFinDeZone = this.isRunning && this.remainingSeconds > 0 && this.remainingSeconds <= 5;
+        const blinkOn = (now % 360) < 200; // Clignotement ~2.8 Hz pour l'alerte
+
+        const archSpacing = isFinDeZone ? 80 : 160;
         const archOffset = this.travelZ % archSpacing;
-        const archWorldH = 0.95;
-        const archWorldW = roadWorldW * 1.15;
+        const archWorldH = isFinDeZone ? 1.45 : 0.95; // Losanges beaucoup plus gros
+        const archWorldW = roadWorldW * (isFinDeZone ? 1.70 : 1.15); // Plus larges
 
         for (let z = zFar - archOffset; z >= zNear; z -= archSpacing) {
             const pBaseL = project(-archWorldW / 2, z);
@@ -632,16 +639,30 @@ window.tronHighway = {
             if (pBaseL.y < hy || pBaseL.y > H + 50) continue;
 
             const depthRatio = Math.min(1, Math.max(0.1, (pBaseL.y - hy) / groundH));
-            const archAlpha = depthRatio * 0.9;
-            const chamfer = (pBaseR.x - pBaseL.x) * 0.15;
+            const chamfer = (pBaseR.x - pBaseL.x) * (isFinDeZone ? 0.28 : 0.18);
 
             ctx.save();
-            ctx.shadowColor = zoneCol;
-            ctx.shadowBlur = Math.min(14, 4 + depthRatio * 10);
-            ctx.strokeStyle = zoneColAlpha(archAlpha);
-            ctx.lineWidth = Math.max(1.5, depthRatio * 3.5);
+            if (isFinDeZone) {
+                // Alerte clignotante éclatante
+                if (blinkOn) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.shadowColor = zoneCol;
+                    ctx.shadowBlur = Math.min(26, 8 + depthRatio * 18);
+                    ctx.lineWidth = Math.max(3.0, depthRatio * 6.5);
+                } else {
+                    ctx.strokeStyle = zoneColAlpha(0.3);
+                    ctx.shadowColor = zoneCol;
+                    ctx.shadowBlur = 6;
+                    ctx.lineWidth = Math.max(1.5, depthRatio * 3.0);
+                }
+            } else {
+                ctx.strokeStyle = zoneColAlpha(depthRatio * 0.9);
+                ctx.shadowColor = zoneCol;
+                ctx.shadowBlur = Math.min(14, 4 + depthRatio * 10);
+                ctx.lineWidth = Math.max(1.5, depthRatio * 3.5);
+            }
 
-            // Arche filaire hexagonale
+            // Losange / Arche filaire hexagonale
             ctx.beginPath();
             ctx.moveTo(pBaseL.x, pBaseL.y);
             ctx.lineTo(pBaseL.x, archTopY + chamfer);
@@ -650,15 +671,51 @@ window.tronHighway = {
             ctx.lineTo(pBaseR.x, archTopY + chamfer);
             ctx.lineTo(pBaseR.x, pBaseR.y);
             ctx.stroke();
+
+            // En fin de zone, double contour intérieur pour accentuer l'effet losange
+            if (isFinDeZone) {
+                const innerGap = (pBaseR.x - pBaseL.x) * 0.08;
+                ctx.lineWidth = Math.max(1.2, depthRatio * 2.5);
+                ctx.beginPath();
+                ctx.moveTo(pBaseL.x + innerGap, pBaseL.y);
+                ctx.lineTo(pBaseL.x + innerGap, archTopY + chamfer + innerGap * 0.5);
+                ctx.lineTo(pBaseL.x + chamfer, archTopY + innerGap * 0.8);
+                ctx.lineTo(pBaseR.x - chamfer, archTopY + innerGap * 0.8);
+                ctx.lineTo(pBaseR.x - innerGap, archTopY + chamfer + innerGap * 0.5);
+                ctx.lineTo(pBaseR.x - innerGap, pBaseR.y);
+                ctx.stroke();
+            }
+
             ctx.restore();
         }
 
-        // 10. Indicateur HUD pente & dénivelé
+        // 10. Indicateurs HUD sur la ligne d'horizon
         ctx.save();
-        ctx.font = 'bold 11px monospace';
-        ctx.fillStyle = zoneColAlpha(0.85);
+        ctx.font = 'bold 15px monospace';
+        ctx.shadowColor = zoneCol;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = zoneColAlpha(0.95);
+
+        // A gauche : Pente (plus gros, ex: ▲ +5.5%)
         const slopeTxt = (this.slopePercent >= 0 ? `▲ +${this.slopePercent}%` : `▼ ${this.slopePercent}%`);
-        ctx.fillText(slopeTxt, 16, Math.max(26, hy - 12));
+        ctx.textAlign = 'left';
+        ctx.fillText(slopeTxt, 18, Math.max(26, hy - 8));
+
+        // A droite : Puissance demandée (ex: 210 W)
+        if (this.targetWatts > 0) {
+            ctx.textAlign = 'right';
+            ctx.fillText(`${this.targetWatts} W`, W - 18, Math.max(26, hy - 8));
+        }
+
+        // Compte à rebours fin de palier au centre de l'horizon
+        if (isFinDeZone) {
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 15px monospace';
+            ctx.fillStyle = blinkOn ? '#ffffff' : zoneColAlpha(0.85);
+            ctx.shadowColor = blinkOn ? '#ffffff' : zoneCol;
+            ctx.shadowBlur = blinkOn ? 14 : 6;
+            ctx.fillText(`⏳ ${Math.ceil(this.remainingSeconds)}s`, cx, Math.max(26, hy - 8));
+        }
         ctx.restore();
     },
 
