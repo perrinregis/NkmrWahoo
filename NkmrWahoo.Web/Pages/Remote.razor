@@ -47,28 +47,37 @@
             </div>
 
             <div>
-                <h2 class="text-lg font-bold">Connexion à votre séance en cours...</h2>
+                <h2 class="text-lg font-bold">Connexion au grand écran...</h2>
                 <p class="text-xs opacity-70 max-w-xs mt-1">
-                    Gardez cette page ouverte, la liaison sécurisée avec votre grand écran s'établit automatiquement.
+                    Scannez le QR Code sur votre PC, ou tapez ci-dessous le code PIN à 6 chiffres affiché sur le PC.
                 </p>
             </div>
 
-            @if (!string.IsNullOrEmpty(targetHostId))
-            {
-                <div class="badge badge-neutral font-mono text-xs py-2 px-3">
-                    Session : @targetHostId
+            <div class="card bg-base-100 p-4 border border-base-content/10 max-w-xs w-full mt-2 flex flex-col gap-3 shadow-xl">
+                <div class="text-left">
+                    <label class="text-xs font-bold">Code PIN du PC (6 chiffres) :</label>
+                    <p class="text-[11px] opacity-60">Visible dans la fenêtre « Télécommande » sur votre PC</p>
                 </div>
-            }
-            else
-            {
-                <div class="card bg-base-100 p-4 border border-base-content/10 max-w-xs w-full mt-2">
-                    <p class="text-xs mb-2">Entrez le code session affiché sur votre PC :</p>
-                    <div class="join w-full">
-                        <input class="input input-sm input-bordered join-item w-full font-mono uppercase" placeholder="ex: nkmr-xyz123" @bind="manualHostId" />
-                        <button class="btn btn-sm btn-primary join-item" @onclick="ConnectManual">Go</button>
+                <div class="join w-full">
+                    <input class="input input-bordered join-item w-full font-mono text-center text-xl font-black tracking-widest" 
+                           type="text" 
+                           inputmode="numeric" 
+                           pattern="[0-9]*"
+                           maxlength="6" 
+                           placeholder="ex: 123456" 
+                           @bind="manualHostId" 
+                           @onkeyup="@(async e => { if (e.Key == "Enter") await ConnectManual(); })" />
+                    <button class="btn btn-primary join-item font-bold" @onclick="ConnectManual">
+                        Connexion
+                    </button>
+                </div>
+                @if (!string.IsNullOrEmpty(targetHostId))
+                {
+                    <div class="text-[11px] opacity-70 font-mono">
+                        Liaison en cours avec : <span class="font-bold text-primary">@targetHostId</span>
                     </div>
-                </div>
-            }
+                }
+            </div>
 
             @if (!string.IsNullOrEmpty(errorMessage))
             {
@@ -190,22 +199,52 @@
             }
             catch { }
 
-            // Récupère l'ID hôte depuis le hash d'URL (#nkmr-xxx) ou query param (?session=xxx)
+            // 1. Essai depuis le query param ?session=123456
             var uri = new Uri(Navigation.Uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var sessionFromQuery = query["session"];
+
+            // 2. Essai depuis le hash #nkmr-123456 ou #123456
             var hash = uri.Fragment.TrimStart('#');
 
-            if (!string.IsNullOrEmpty(hash))
+            // 3. Fallback direct via JS window.location au cas où Blazor n'a pas tout dans Navigation.Uri
+            string jsHash = "";
+            string jsQuery = "";
+            try
             {
-                targetHostId = hash;
+                jsHash = await JSRuntime.InvokeAsync<string>("eval", "window.location.hash || ''");
+                jsQuery = await JSRuntime.InvokeAsync<string>("eval", "window.location.search || ''");
             }
-            else
+            catch { }
+
+            string foundId = "";
+            if (!string.IsNullOrEmpty(sessionFromQuery))
             {
-                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                targetHostId = query["session"] ?? "";
+                foundId = sessionFromQuery;
+            }
+            else if (!string.IsNullOrEmpty(hash))
+            {
+                foundId = hash;
+            }
+            else if (!string.IsNullOrEmpty(jsQuery) && jsQuery.Contains("session="))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(jsQuery, @"session=([a-zA-Z0-9_-]+)");
+                if (m.Success) foundId = m.Groups[1].Value;
+            }
+            else if (!string.IsNullOrEmpty(jsHash))
+            {
+                foundId = jsHash.TrimStart('#');
             }
 
-            if (!string.IsNullOrEmpty(targetHostId))
+            if (!string.IsNullOrEmpty(foundId))
             {
+                var pinOnly = foundId.Replace("nkmr-", "");
+                manualHostId = pinOnly;
+                if (!foundId.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase))
+                {
+                    foundId = "nkmr-" + foundId;
+                }
+                targetHostId = foundId;
                 await ConnectToHost(targetHostId);
             }
         }
@@ -228,7 +267,12 @@
     {
         if (!string.IsNullOrWhiteSpace(manualHostId))
         {
-            targetHostId = manualHostId.Trim();
+            var code = manualHostId.Trim();
+            if (!code.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase))
+            {
+                code = "nkmr-" + code;
+            }
+            targetHostId = code;
             await ConnectToHost(targetHostId);
         }
     }

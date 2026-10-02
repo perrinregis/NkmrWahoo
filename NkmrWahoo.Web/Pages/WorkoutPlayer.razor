@@ -319,6 +319,26 @@ else
                 }
             </div>
 
+            <!-- Code PIN à 6 chiffres ultra-visible -->
+            <div class="bg-base-200 rounded-2xl p-3 border border-primary/30 w-full flex flex-col items-center gap-1 shadow-sm">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-base-content/70">
+                    Code de session (PIN mobile) :
+                </span>
+                <div class="flex items-center gap-2">
+                    <span class="text-3xl font-black font-mono tracking-[0.25em] text-primary">
+                        @(string.IsNullOrEmpty(sessionPin) ? "Génération..." : sessionPin)
+                    </span>
+                    @if (!string.IsNullOrEmpty(sessionPin))
+                    {
+                        <button class="btn btn-ghost btn-circle btn-xs text-base-content/60 hover:text-primary" 
+                                @onclick="CopySessionPin" 
+                                title="Copier le code PIN">
+                            📋
+                        </button>
+                    }
+                </div>
+            </div>
+
             <!-- Statut de connexion du smartphone -->
             @if (isCompanionConnected)
             {
@@ -331,7 +351,7 @@ else
             {
                 <div class="badge badge-neutral py-2.5 px-3 font-semibold text-[11px] gap-2 opacity-80">
                     <span class="loading loading-spinner loading-xs"></span>
-                    En attente du scan...
+                    En attente de connexion...
                 </div>
             }
 
@@ -682,9 +702,20 @@ else
         StateHasChanged();
     }
 
+    private string sessionPin => !string.IsNullOrEmpty(hostPeerId) ? hostPeerId.Replace("nkmr-", "") : "";
+
+    private async Task CopySessionPin()
+    {
+        if (!string.IsNullOrEmpty(sessionPin))
+        {
+            try { await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", sessionPin); } catch { }
+        }
+    }
+
     private async Task OpenRemoteModal()
     {
         showRemoteModal = true;
+        await InvokeAsync(StateHasChanged);
         try
         {
             await JSRuntime.InvokeVoidAsync("workoutHost.init", dotNetHelper);

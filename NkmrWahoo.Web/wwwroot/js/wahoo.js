@@ -750,17 +750,18 @@ window.workoutHost = {
             return;
         }
 
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const hostId = "nkmr-" + randomSuffix;
+        const sessionPin = Math.floor(100000 + Math.random() * 900000).toString();
+        const hostId = "nkmr-" + sessionPin;
 
         try {
             this.peer = new Peer(hostId, { debug: 1 });
 
             this.peer.on('open', (id) => {
                 this.peerId = id;
+                const pin = id.replace('nkmr-', '');
                 const base = window.location.origin + window.location.pathname.replace(/\/workout-player.*/, '');
-                this.remoteUrl = base + (base.endsWith('/') ? '' : '/') + "remote#" + id;
-                console.log("WorkoutHost PeerJS ouvert :", id, "URL télécommande :", this.remoteUrl);
+                this.remoteUrl = base + (base.endsWith('/') ? '' : '/') + "remote?session=" + pin + "#" + id;
+                console.log("WorkoutHost PeerJS ouvert :", id, "PIN :", pin, "URL télécommande :", this.remoteUrl);
                 if (this.dotNetHelper) {
                     this.dotNetHelper.invokeMethodAsync('OnHostPeerReady', id, this.remoteUrl);
                 }
@@ -799,6 +800,14 @@ window.workoutHost = {
 
             this.peer.on('error', (err) => {
                 console.warn("Erreur PeerJS Host :", err);
+                if (err && err.type === 'unavailable-id') {
+                    setTimeout(() => {
+                        window.workoutHost.peer = null;
+                        if (window.workoutHost.dotNetHelper) {
+                            window.workoutHost.init(window.workoutHost.dotNetHelper);
+                        }
+                    }, 500);
+                }
             });
         } catch (e) {
             console.error("Impossible d'initialiser PeerJS Host :", e);
@@ -806,17 +815,24 @@ window.workoutHost = {
     },
 
     generateQrCode: function (containerId, text) {
-        const el = document.getElementById(containerId);
-        if (!el || typeof QRCode === 'undefined') return;
-        el.innerHTML = "";
-        this.qrInstance = new QRCode(el, {
-            text: text,
-            width: 190,
-            height: 190,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-        });
+        const tryRender = (attempts) => {
+            const el = document.getElementById(containerId);
+            if (!el) {
+                if (attempts > 0) setTimeout(() => tryRender(attempts - 1), 80);
+                return;
+            }
+            if (typeof QRCode === 'undefined') return;
+            el.innerHTML = "";
+            this.qrInstance = new QRCode(el, {
+                text: text,
+                width: 190,
+                height: 190,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        };
+        tryRender(5);
     },
 
     sendState: function (stateJson) {
