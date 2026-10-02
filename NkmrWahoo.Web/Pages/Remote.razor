@@ -40,26 +40,71 @@
 
     @if (!isConnected)
     {
-        <!-- ÉCRAN D'ATTENTE DE CONNEXION -->
-        <main class="flex-1 flex flex-col items-center justify-center gap-4 text-center p-6">
-            <div class="relative">
-                <span class="loading loading-spinner loading-lg text-primary"></span>
-            </div>
-
+        <!-- ÉCRAN D'ATTENTE DE CONNEXION AVEC SCANNER CAMÉRA INTÉGRÉ -->
+        <main class="flex-1 flex flex-col items-center justify-center gap-4 text-center p-3 animate-fade-in">
             <div>
-                <h2 class="text-lg font-bold">Connexion au grand écran...</h2>
-                <p class="text-xs opacity-70 max-w-xs mt-1">
-                    Scannez le QR Code sur votre PC, ou tapez ci-dessous le code PIN à 6 chiffres affiché sur le PC.
+                <h2 class="text-lg font-black flex items-center justify-center gap-2">
+                    <span>📷</span> Scanner l'écran du PC
+                </h2>
+                <p class="text-xs opacity-70 max-w-xs mt-0.5">
+                    Visez le QR Code affiché sur votre PC pour connecter instantanément la télécommande.
                 </p>
             </div>
 
-            <div class="card bg-base-100 p-4 border border-base-content/10 max-w-xs w-full mt-2 flex flex-col gap-3 shadow-xl">
-                <div class="text-left">
-                    <label class="text-xs font-bold">Code PIN du PC (6 chiffres) :</label>
-                    <p class="text-[11px] opacity-60">Visible dans la fenêtre « Télécommande » sur votre PC</p>
+            <!-- Lecteur Caméra QR Code -->
+            <div class="card bg-base-100 p-3 border border-base-content/10 max-w-xs w-full shadow-2xl flex flex-col items-center gap-2">
+                <div class="relative w-full aspect-square max-w-[260px] bg-black rounded-2xl shadow-inner overflow-hidden ring-4 ring-primary/20">
+                    <div id="videoFeed" class="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full"></div>
+                    <div class="absolute inset-0 border-2 border-primary/50 pointer-events-none rounded-2xl"></div>
+
+                    @if (isCameraActive)
+                    {
+                        <div class="absolute top-0 left-0 w-full h-1 bg-primary shadow-[0_0_15px_rgba(59,130,246,0.9)] animate-scan pointer-events-none"></div>
+                    }
+
+                    @if (!isCameraActive && !isConnecting)
+                    {
+                        <div class="absolute inset-0 flex flex-col items-center justify-center bg-base-200/90 gap-2 p-4">
+                            <span class="text-3xl">📷</span>
+                            <span class="text-xs font-semibold opacity-75">Caméra en pause</span>
+                            <button class="btn btn-primary btn-sm rounded-full shadow" @onclick="StartScanner">
+                                Activer la caméra
+                            </button>
+                        </div>
+                    }
+
+                    @if (isConnecting)
+                    {
+                        <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-2 text-white">
+                            <span class="loading loading-spinner loading-md text-primary"></span>
+                            <span class="text-xs font-bold font-mono">Connexion au PC en cours...</span>
+                        </div>
+                    }
+                </div>
+
+                @if (isCameraActive)
+                {
+                    <div class="flex items-center justify-between w-full px-2 text-xs font-semibold">
+                        <span class="flex items-center gap-1.5 opacity-80">
+                            <span class="loading loading-spinner loading-xs text-primary"></span>
+                            Recherche QR Code...
+                        </span>
+                        <button class="btn btn-ghost btn-xs text-error" @onclick="StopScanner">Arrêter</button>
+                    </div>
+                }
+            </div>
+
+            <!-- Alternative : saisie manuelle du code PIN -->
+            <div class="card bg-base-100 p-3 border border-base-content/10 max-w-xs w-full shadow flex flex-col gap-2">
+                <div class="text-left flex items-center justify-between">
+                    <label class="text-[11px] font-bold opacity-80">Ou code PIN à 6 chiffres :</label>
+                    @if (!string.IsNullOrEmpty(targetHostId))
+                    {
+                        <span class="text-[10px] font-mono text-primary font-bold">@targetHostId</span>
+                    }
                 </div>
                 <div class="join w-full">
-                    <input class="input input-bordered join-item w-full font-mono text-center text-xl font-black tracking-widest" 
+                    <input class="input input-sm input-bordered join-item w-full font-mono text-center text-lg font-black tracking-widest" 
                            type="text" 
                            inputmode="numeric" 
                            pattern="[0-9]*"
@@ -67,28 +112,22 @@
                            placeholder="ex: 123456" 
                            @bind="manualHostId" 
                            @onkeyup="@(async e => { if (e.Key == "Enter") await ConnectManual(); })" />
-                    <button class="btn btn-primary join-item font-bold" @onclick="ConnectManual" disabled="@isConnecting">
+                    <button class="btn btn-sm btn-primary join-item font-bold" @onclick="ConnectManual" disabled="@isConnecting">
                         @if (isConnecting)
                         {
                             <span class="loading loading-spinner loading-xs"></span>
                         }
                         else
                         {
-                            <span>Connexion</span>
+                            <span>OK</span>
                         }
                     </button>
                 </div>
-                @if (!string.IsNullOrEmpty(targetHostId))
-                {
-                    <div class="text-[11px] opacity-70 font-mono">
-                        Liaison en cours avec : <span class="font-bold text-primary">@targetHostId</span>
-                    </div>
-                }
             </div>
 
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="alert alert-warning text-xs py-2 px-3 max-w-xs">
+                <div class="alert alert-warning text-xs py-2 px-3 max-w-xs shadow">
                     <span>⚠️ @errorMessage</span>
                 </div>
             }
@@ -184,10 +223,21 @@
     </footer>
 </div>
 
+<style>
+    @@keyframes scan {
+        0%, 100% { top: 0%; }
+        50% { top: 100%; }
+    }
+    .animate-scan {
+        animation: scan 2.5s ease-in-out infinite;
+    }
+</style>
+
 @code {
     private DotNetObjectReference<Remote>? dotNetHelper;
     private bool isConnected = false;
     private bool isConnecting = false;
+    private bool isCameraActive = false;
     private string targetHostId = "";
     private string manualHostId = "";
     private string errorMessage = "";
@@ -255,7 +305,93 @@
                 targetHostId = foundId;
                 await ConnectToHost(targetHostId);
             }
+            else
+            {
+                _ = StartScanner();
+            }
         }
+    }
+
+    private async Task StartScanner()
+    {
+        if (isCameraActive || isConnected) return;
+        isCameraActive = true;
+        errorMessage = "";
+        StateHasChanged();
+
+        await Task.Delay(250);
+
+        try
+        {
+            var scanned = await JSRuntime.InvokeAsync<string>("qrScanner.startScanner", "videoFeed", null, true);
+            if (!string.IsNullOrWhiteSpace(scanned))
+            {
+                await StopScanner();
+                var id = ExtractHostId(scanned);
+                if (!string.IsNullOrEmpty(id))
+                {
+                    manualHostId = id.Replace("nkmr-", "");
+                    targetHostId = id;
+                    await ConnectToHost(targetHostId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Scanner caméra indisponible : {ex.Message}");
+            isCameraActive = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopScanner()
+    {
+        if (!isCameraActive) return;
+        isCameraActive = false;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("qrScanner.stopScanner", "videoFeed");
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private string ExtractHostId(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        raw = raw.Trim();
+
+        if (Uri.TryCreate(raw, UriKind.Absolute, out Uri? uri))
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var session = query["session"];
+            if (!string.IsNullOrEmpty(session))
+            {
+                return session.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase) ? session : "nkmr-" + session;
+            }
+            var frag = uri.Fragment.TrimStart('#');
+            if (!string.IsNullOrEmpty(frag))
+            {
+                return frag.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase) ? frag : "nkmr-" + frag;
+            }
+        }
+
+        if (raw.Contains("session="))
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(raw, @"session=([a-zA-Z0-9_-]+)");
+            if (m.Success)
+            {
+                var val = m.Groups[1].Value;
+                return val.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase) ? val : "nkmr-" + val;
+            }
+        }
+
+        if (raw.StartsWith("nkmr-", StringComparison.OrdinalIgnoreCase))
+        {
+            return raw;
+        }
+
+        return "nkmr-" + raw;
     }
 
     private async Task ConnectToHost(string hostId)
@@ -292,6 +428,7 @@
     [JSInvokable]
     public void OnConnectedToHost()
     {
+        _ = StopScanner();
         isConnected = true;
         isConnecting = false;
         errorMessage = "";
@@ -357,6 +494,7 @@
 
     public void Dispose()
     {
+        _ = StopScanner();
         try
         {
             _ = JSRuntime.InvokeVoidAsync("workoutRemote.dispose");
