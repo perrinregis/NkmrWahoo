@@ -689,32 +689,32 @@ window.tronHighway = {
             ctx.restore();
         }
 
-        // 10. Indicateurs HUD sur la ligne d'horizon
+        // 10. Indicateurs HUD sur la ligne d'horizon (Pente au milieu gauche, Puissance cible au milieu droit)
         ctx.save();
-        ctx.font = 'bold 15px monospace';
+        const hudFontSize = Math.max(18, Math.min(26, Math.round(W * 0.038)));
+        ctx.font = `bold ${hudFontSize}px monospace`;
         ctx.shadowColor = zoneCol;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.fillStyle = zoneColAlpha(0.95);
+        ctx.textAlign = 'center';
 
-        // A gauche : Pente (plus gros, ex: ▲ +5.5%)
+        // Au milieu gauche : Pente (beaucoup plus gros, ex: ▲ +5.5%)
         const slopeTxt = (this.slopePercent >= 0 ? `▲ +${this.slopePercent}%` : `▼ ${this.slopePercent}%`);
-        ctx.textAlign = 'left';
-        ctx.fillText(slopeTxt, 18, Math.max(26, hy - 8));
+        ctx.fillText(slopeTxt, W * 0.22, Math.max(28, hy - 12));
 
-        // A droite : Puissance demandée (ex: 210 W)
+        // Au milieu droit : Puissance demandée (ex: 210 W)
         if (this.targetWatts > 0) {
-            ctx.textAlign = 'right';
-            ctx.fillText(`${this.targetWatts} W`, W - 18, Math.max(26, hy - 8));
+            ctx.fillText(`${this.targetWatts} W`, W * 0.78, Math.max(28, hy - 12));
         }
 
-        // Compte à rebours fin de palier au centre de l'horizon
+        // Compte à rebours fin de palier au centre exact de l'horizon
         if (isFinDeZone) {
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 15px monospace';
+            const countFontSize = Math.max(20, Math.min(30, Math.round(W * 0.045)));
+            ctx.font = `bold ${countFontSize}px monospace`;
             ctx.fillStyle = blinkOn ? '#ffffff' : zoneColAlpha(0.85);
             ctx.shadowColor = blinkOn ? '#ffffff' : zoneCol;
-            ctx.shadowBlur = blinkOn ? 14 : 6;
-            ctx.fillText(`⏳ ${Math.ceil(this.remainingSeconds)}s`, cx, Math.max(26, hy - 8));
+            ctx.shadowBlur = blinkOn ? 18 : 6;
+            ctx.fillText(`⏳ ${Math.ceil(this.remainingSeconds)}s`, cx, Math.max(28, hy - 12));
         }
         ctx.restore();
     },

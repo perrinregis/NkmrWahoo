@@ -100,11 +100,28 @@
                 }
             }
 
-            <!-- Ligne de progression en temps réel (Curseur) -->
+            <!-- Barre de progression horizontale en bas (Ligne Orange) -->
+            <rect x="0" y="@(svgHeight - 4)" width="@totalTime" height="4" fill="rgba(255,255,255,0.2)" class="pointer-events-none" />
+            @if (ElapsedTotalSeconds > 0)
+            {
+                <rect x="0" y="@(svgHeight - 4)" width="@Math.Min(ElapsedTotalSeconds, totalTime)" height="4" fill="#ff5500" class="pointer-events-none" />
+            }
+
+            <!-- Curseur vertical de progression ultra-visible (Orange & Noir avec pointeur) -->
             @if (ElapsedTotalSeconds >= 0 && ElapsedTotalSeconds <= totalTime)
             {
-                <line x1="@ElapsedTotalSeconds" y1="0" x2="@ElapsedTotalSeconds" y2="@svgHeight" stroke="#ffffff" stroke-width="@(Math.Max(3, totalTime / 300.0))" class="pointer-events-none shadow" />
-                <circle cx="@ElapsedTotalSeconds" cy="4" r="@(Math.Max(4, totalTime / 250.0))" fill="#ef4444" class="pointer-events-none" />
+                var cursorW = Math.Max(5.0, totalTime / 180.0);
+                var shadowW = cursorW + Math.Max(4.0, totalTime / 220.0);
+                var pointerW = Math.Max(12.0, totalTime / 90.0);
+
+                <!-- Ombre noire sous le trait pour garantir le contraste sur n'importe quel palier -->
+                <line x1="@ElapsedTotalSeconds" y1="0" x2="@ElapsedTotalSeconds" y2="@(svgHeight - 4)" stroke="#000000" stroke-width="@shadowW" class="pointer-events-none opacity-90" />
+                <!-- Trait principal vertical Orange électrique -->
+                <line x1="@ElapsedTotalSeconds" y1="0" x2="@ElapsedTotalSeconds" y2="@(svgHeight - 4)" stroke="#ff5500" stroke-width="@cursorW" class="pointer-events-none" />
+
+                <!-- Pointeur triangulaire en haut -->
+                <polygon points="@(ElapsedTotalSeconds - pointerW/2),0 @(ElapsedTotalSeconds + pointerW/2),0 @ElapsedTotalSeconds,@(svgHeight * 0.18)" fill="#ff5500" stroke="#000000" stroke-width="@(Math.Max(1.5, totalTime / 350.0))" class="pointer-events-none" />
+                <circle cx="@ElapsedTotalSeconds" cy="@(svgHeight * 0.07)" r="@(Math.Max(3.0, totalTime / 260.0))" fill="#ffffff" class="pointer-events-none" />
             }
         </svg>
     </div>
