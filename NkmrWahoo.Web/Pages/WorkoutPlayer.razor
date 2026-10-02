@@ -92,6 +92,19 @@ else
                             </button>
                         }
 
+                        <!-- Bouton Télécommande Smartphone (Companion) -->
+                        <button class="btn btn-ghost btn-circle btn-xs @(isCompanionConnected ? "text-success hover:bg-success/20" : "text-base-content/60 hover:text-primary") relative" 
+                                @onclick="OpenRemoteModal" 
+                                title="Télécommande smartphone (Companion)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            @if (isCompanionConnected)
+                            {
+                                <span class="absolute top-0 right-0 block h-1.5 w-1.5 rounded-full ring-1 ring-base-100 bg-success animate-pulse"></span>
+                            }
+                        </button>
+
                         @if (isRunning)
                         {
                             <button class="btn btn-warning btn-circle btn-xs sm:btn-sm shadow" @onclick="PauseWorkout" title="Mettre en pause">
@@ -282,6 +295,57 @@ else
     </div>
 }
 
+<!-- MODAL APPAIRAGE TÉLÉCOMMANDE SMARTPHONE (QR CODE) -->
+@if (showRemoteModal)
+{
+    <div class="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" @onclick="CloseRemoteModal">
+        <div class="card bg-base-100 shadow-2xl max-w-sm w-full p-5 border border-base-content/10 flex flex-col items-center text-center gap-3 relative" @onclick:stopPropagation="true">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" @onclick="CloseRemoteModal">✕</button>
+
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">📱</span>
+                <h3 class="font-black text-lg">Télécommande Guidon</h3>
+            </div>
+
+            <p class="text-xs opacity-75 max-w-xs">
+                Scannez ce QR Code avec l'appareil photo de votre smartphone pour piloter la séance depuis votre guidon.
+            </p>
+
+            <!-- Conteneur QR Code -->
+            <div id="companion-qrcode" class="p-3 bg-white rounded-2xl shadow-inner flex items-center justify-center min-w-[210px] min-h-[210px]">
+                @if (string.IsNullOrEmpty(remotePairUrl))
+                {
+                    <span class="loading loading-spinner loading-md text-neutral"></span>
+                }
+            </div>
+
+            <!-- Statut de connexion du smartphone -->
+            @if (isCompanionConnected)
+            {
+                <div class="badge badge-success py-3 px-4 font-bold text-xs gap-2 shadow">
+                    <span class="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                    Smartphone connecté en direct !
+                </div>
+            }
+            else
+            {
+                <div class="badge badge-neutral py-2.5 px-3 font-semibold text-[11px] gap-2 opacity-80">
+                    <span class="loading loading-spinner loading-xs"></span>
+                    En attente du scan...
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(remotePairUrl))
+            {
+                <div class="w-full flex items-center gap-1 mt-1">
+                    <input type="text" class="input input-xs input-bordered w-full font-mono text-[10px]" readonly value="@remotePairUrl" />
+                    <button class="btn btn-xs btn-primary font-bold" @onclick="CopyRemoteUrl">Copier</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 <style>
     @@media (orientation: landscape) {
         .portrait-warning {
@@ -324,6 +388,12 @@ else
     private bool isMockMode = false;
     private DotNetObjectReference<WorkoutPlayer>? dotNetHelper;
 
+    // Companion / Télécommande WebRTC
+    private bool showRemoteModal = false;
+    private bool isCompanionConnected = false;
+    private string hostPeerId = "";
+    private string remotePairUrl = "";
+
     // Timer
     private System.Threading.PeriodicTimer? periodicTimer;
     private CancellationTokenSource? timerCts;
@@ -359,6 +429,7 @@ else
                 await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
                 await JSRuntime.InvokeVoidAsync("tronHighway.init", "tron-highway-canvas");
                 await UpdateTronHighway();
+                await JSRuntime.InvokeVoidAsync("workoutHost.init", dotNetHelper);
             }
             catch { }
         }
@@ -410,6 +481,7 @@ else
 
         UpdateTargetPower(forceSendToTrainer: true);
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
 
         _ = JSRuntime.InvokeVoidAsync("workoutScreen.scrollToActiveStep", $"step-row-{stepIndex}");
     }
@@ -430,6 +502,7 @@ else
                 _ = JSRuntime.InvokeAsync<bool>("wahooBluetooth.setTargetPower", currentTargetWatts);
             }
             _ = UpdateTronHighway();
+            BroadcastStateToCompanion();
         }
     }
 
@@ -449,6 +522,7 @@ else
 
         UpdateTargetPower(forceSendToTrainer: true);
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
 
         _ = RunWorkoutLoop(timerCts.Token);
     }
@@ -460,6 +534,7 @@ else
         periodicTimer?.Dispose();
         periodicTimer = null;
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
 
         if (isBtConnected)
         {
@@ -521,6 +596,7 @@ else
             }
 
             _ = UpdateTronHighway();
+            BroadcastStateToCompanion();
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -554,6 +630,7 @@ else
         intensityBias = Math.Clamp(intensityBias + delta, 50, 150);
         UpdateTargetPower(forceSendToTrainer: true);
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
     }
 
     private async Task ConnectBluetooth(bool useMock)
@@ -592,6 +669,7 @@ else
     {
         currentPower = power;
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
         StateHasChanged();
     }
 
@@ -600,7 +678,126 @@ else
     {
         currentCadence = cadence;
         _ = UpdateTronHighway();
+        BroadcastStateToCompanion();
         StateHasChanged();
+    }
+
+    private async Task OpenRemoteModal()
+    {
+        showRemoteModal = true;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutHost.init", dotNetHelper);
+            if (!string.IsNullOrEmpty(remotePairUrl))
+            {
+                await Task.Delay(50);
+                await JSRuntime.InvokeVoidAsync("workoutHost.generateQrCode", "companion-qrcode", remotePairUrl);
+            }
+        }
+        catch { }
+    }
+
+    private void CloseRemoteModal() => showRemoteModal = false;
+
+    private async Task CopyRemoteUrl()
+    {
+        if (!string.IsNullOrEmpty(remotePairUrl))
+        {
+            try { await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", remotePairUrl); } catch { }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnHostPeerReady(string peerId, string url)
+    {
+        hostPeerId = peerId;
+        remotePairUrl = url;
+        if (showRemoteModal)
+        {
+            await Task.Delay(50);
+            await JSRuntime.InvokeVoidAsync("workoutHost.generateQrCode", "companion-qrcode", url);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnCompanionConnected()
+    {
+        isCompanionConnected = true;
+        BroadcastStateToCompanion();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnCompanionDisconnected()
+    {
+        isCompanionConnected = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnRemoteCommand(string json)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("action", out var actionProp))
+            {
+                var action = actionProp.GetString();
+                switch (action)
+                {
+                    case "adjustIntensity":
+                        if (root.TryGetProperty("delta", out var deltaProp))
+                        {
+                            AdjustIntensity(deltaProp.GetInt32());
+                            await InvokeAsync(StateHasChanged);
+                        }
+                        break;
+                    case "togglePlay":
+                        if (isRunning) PauseWorkout();
+                        else await StartWorkout();
+                        await InvokeAsync(StateHasChanged);
+                        break;
+                    case "nextStep":
+                        NextStep();
+                        await InvokeAsync(StateHasChanged);
+                        break;
+                    case "prevStep":
+                        PreviousStep();
+                        await InvokeAsync(StateHasChanged);
+                        break;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void BroadcastStateToCompanion()
+    {
+        if (!isCompanionConnected || workout == null) return;
+        try
+        {
+            var stateObj = new
+            {
+                power = currentPower,
+                targetWatts = currentTargetWatts,
+                cadence = currentCadence,
+                stepRemainingSeconds = stepRemainingSeconds,
+                totalRemainingSeconds = totalRemainingSeconds,
+                totalSeconds = workout.Time,
+                intensityBias = intensityBias,
+                isRunning = isRunning,
+                zoneName = currentStep?.GetZoneName(currentTargetRatio) ?? "",
+                zoneColor = currentStep?.GetZoneColor(currentTargetRatio) ?? "#38bdf8",
+                currentStepIndex = currentStepIndex,
+                totalSteps = workout.WorkoutStepsArray.Count,
+                workoutName = workout.Name
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(stateObj);
+            _ = JSRuntime.InvokeVoidAsync("workoutHost.sendState", json);
+        }
+        catch { }
     }
 
     private string FormatTime(int seconds)
@@ -616,6 +813,7 @@ else
         try
         {
             await JSRuntime.InvokeVoidAsync("tronHighway.dispose");
+            await JSRuntime.InvokeVoidAsync("workoutHost.dispose");
             await JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
             await JSRuntime.InvokeVoidAsync("workoutScreen.unlockOrientation");
         }
@@ -629,6 +827,7 @@ else
         try
         {
             _ = JSRuntime.InvokeVoidAsync("tronHighway.dispose");
+            _ = JSRuntime.InvokeVoidAsync("workoutHost.dispose");
             _ = JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
         }
         catch { }

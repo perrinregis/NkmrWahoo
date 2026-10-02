@@ -732,3 +732,192 @@ window.tronHighway = {
         this.ctx = null;
     }
 };
+
+window.workoutHost = {
+    peer: null,
+    conn: null,
+    peerId: null,
+    remoteUrl: null,
+    dotNetHelper: null,
+    qrInstance: null,
+
+    init: function (dotNetHelper) {
+        this.dotNetHelper = dotNetHelper;
+        if (this.peer && !this.peer.destroyed) {
+            if (this.peerId && this.remoteUrl && this.dotNetHelper) {
+                this.dotNetHelper.invokeMethodAsync('OnHostPeerReady', this.peerId, this.remoteUrl);
+            }
+            return;
+        }
+
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const hostId = "nkmr-" + randomSuffix;
+
+        try {
+            this.peer = new Peer(hostId, { debug: 1 });
+
+            this.peer.on('open', (id) => {
+                this.peerId = id;
+                const base = window.location.origin + window.location.pathname.replace(/\/workout-player.*/, '');
+                this.remoteUrl = base + (base.endsWith('/') ? '' : '/') + "remote#" + id;
+                console.log("WorkoutHost PeerJS ouvert :", id, "URL télécommande :", this.remoteUrl);
+                if (this.dotNetHelper) {
+                    this.dotNetHelper.invokeMethodAsync('OnHostPeerReady', id, this.remoteUrl);
+                }
+            });
+
+            this.peer.on('connection', (connection) => {
+                console.log("Connexion reçue d'un smartphone compagnon !");
+                this.conn = connection;
+
+                this.conn.on('open', () => {
+                    console.log("Canal de données compagnon ouvert !");
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnCompanionConnected');
+                    }
+                });
+
+                this.conn.on('data', (data) => {
+                    console.log("Commande reçue du smartphone :", data);
+                    if (this.dotNetHelper && data) {
+                        this.dotNetHelper.invokeMethodAsync('OnRemoteCommand', JSON.stringify(data));
+                    }
+                });
+
+                this.conn.on('close', () => {
+                    console.log("Smartphone compagnon déconnecté.");
+                    this.conn = null;
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnCompanionDisconnected');
+                    }
+                });
+
+                this.conn.on('error', (err) => {
+                    console.warn("Erreur connexion compagnon :", err);
+                });
+            });
+
+            this.peer.on('error', (err) => {
+                console.warn("Erreur PeerJS Host :", err);
+            });
+        } catch (e) {
+            console.error("Impossible d'initialiser PeerJS Host :", e);
+        }
+    },
+
+    generateQrCode: function (containerId, text) {
+        const el = document.getElementById(containerId);
+        if (!el || typeof QRCode === 'undefined') return;
+        el.innerHTML = "";
+        this.qrInstance = new QRCode(el, {
+            text: text,
+            width: 190,
+            height: 190,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    },
+
+    sendState: function (stateJson) {
+        if (this.conn && this.conn.open) {
+            try {
+                this.conn.send(JSON.parse(stateJson));
+            } catch (e) {
+                console.warn("Erreur envoi état au smartphone :", e);
+            }
+        }
+    },
+
+    dispose: function () {
+        if (this.conn) {
+            try { this.conn.close(); } catch (e) {}
+            this.conn = null;
+        }
+        if (this.peer) {
+            try { this.peer.destroy(); } catch (e) {}
+            this.peer = null;
+        }
+        this.qrInstance = null;
+        this.dotNetHelper = null;
+    }
+};
+
+window.workoutRemote = {
+    peer: null,
+    conn: null,
+    dotNetHelper: null,
+
+    connect: function (dotNetHelper, hostId) {
+        this.dotNetHelper = dotNetHelper;
+        this.dispose();
+
+        try {
+            this.peer = new Peer({ debug: 1 });
+
+            this.peer.on('open', (id) => {
+                console.log("Remote PeerJS ouvert avec id :", id);
+                console.log("Tentative de connexion à l'hôte :", hostId);
+                this.conn = this.peer.connect(hostId, { reliable: true });
+
+                this.conn.on('open', () => {
+                    console.log("Connecté avec succès à l'hôte PC !");
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnConnectedToHost');
+                    }
+                });
+
+                this.conn.on('data', (data) => {
+                    if (this.dotNetHelper && data) {
+                        this.dotNetHelper.invokeMethodAsync('OnStateReceived', JSON.stringify(data));
+                    }
+                });
+
+                this.conn.on('close', () => {
+                    console.log("Connexion avec l'hôte PC fermée.");
+                    if (this.dotNetHelper) {
+                        this.dotNetHelper.invokeMethodAsync('OnDisconnectedFromHost');
+                    }
+                });
+
+                this.conn.on('error', (err) => {
+                    console.warn("Erreur de connexion télécommande :", err);
+                });
+            });
+
+            this.peer.on('error', (err) => {
+                console.warn("Erreur PeerJS Télécommande :", err);
+                if (this.dotNetHelper) {
+                    this.dotNetHelper.invokeMethodAsync('OnRemoteError', err.type || err.message || "Erreur de connexion");
+                }
+            });
+        } catch (e) {
+            console.error("Erreur lancement télécommande :", e);
+        }
+    },
+
+    sendCommand: function (cmdJson) {
+        if (this.conn && this.conn.open) {
+            try {
+                this.conn.send(JSON.parse(cmdJson));
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(35);
+                }
+            } catch (e) {
+                console.warn("Erreur envoi commande au PC :", e);
+            }
+        }
+    },
+
+    dispose: function () {
+        if (this.conn) {
+            try { this.conn.close(); } catch (e) {}
+            this.conn = null;
+        }
+        if (this.peer) {
+            try { this.peer.destroy(); } catch (e) {}
+            this.peer = null;
+        }
+        this.dotNetHelper = null;
+    }
+};

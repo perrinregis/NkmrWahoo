@@ -1,0 +1,326 @@
+@page "/remote"
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Télécommande Guidon - NkmrWahoo</PageTitle>
+
+<div class="min-h-screen bg-base-300 text-base-content flex flex-col justify-between p-3 select-none">
+    <!-- 1. EN-TÊTE COMPANION -->
+    <header class="flex items-center justify-between bg-base-100/90 backdrop-blur rounded-2xl p-3 border border-base-content/10 shadow-lg">
+        <div class="flex items-center gap-2">
+            <span class="relative flex h-3 w-3">
+                @if (isConnected)
+                {
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-success"></span>
+                }
+                else
+                {
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-warning"></span>
+                }
+            </span>
+            <div>
+                <h1 class="font-black text-sm leading-tight truncate max-w-[180px] sm:max-w-xs">
+                    @(string.IsNullOrEmpty(state.WorkoutName) ? "Télécommande NkmrWahoo" : state.WorkoutName)
+                </h1>
+                <div class="text-[10px] opacity-70">
+                    @(isConnected ? "Connecté au Grand Écran" : "Recherche du Grand Écran...")
+                </div>
+            </div>
+        </div>
+
+        @if (isConnected)
+        {
+            <div class="badge badge-sm font-bold text-white shadow" style="background-color: @state.ZoneColor">
+                @state.ZoneName
+            </div>
+        }
+    </header>
+
+    @if (!isConnected)
+    {
+        <!-- ÉCRAN D'ATTENTE DE CONNEXION -->
+        <main class="flex-1 flex flex-col items-center justify-center gap-4 text-center p-6">
+            <div class="relative">
+                <span class="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+
+            <div>
+                <h2 class="text-lg font-bold">Connexion à votre séance en cours...</h2>
+                <p class="text-xs opacity-70 max-w-xs mt-1">
+                    Gardez cette page ouverte, la liaison sécurisée avec votre grand écran s'établit automatiquement.
+                </p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(targetHostId))
+            {
+                <div class="badge badge-neutral font-mono text-xs py-2 px-3">
+                    Session : @targetHostId
+                </div>
+            }
+            else
+            {
+                <div class="card bg-base-100 p-4 border border-base-content/10 max-w-xs w-full mt-2">
+                    <p class="text-xs mb-2">Entrez le code session affiché sur votre PC :</p>
+                    <div class="join w-full">
+                        <input class="input input-sm input-bordered join-item w-full font-mono uppercase" placeholder="ex: nkmr-xyz123" @bind="manualHostId" />
+                        <button class="btn btn-sm btn-primary join-item" @onclick="ConnectManual">Go</button>
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-warning text-xs py-2 px-3 max-w-xs">
+                    <span>⚠️ @errorMessage</span>
+                </div>
+            }
+        </main>
+    }
+    else
+    {
+        <!-- 2. COCKPIT TÉLÉCOMMANDE GUIDON (GROS BOUTONS) -->
+        <main class="flex-1 flex flex-col justify-center gap-3 py-2">
+            <!-- CARTE COMPTEURS GÉANTS -->
+            <div class="grid grid-cols-3 gap-2">
+                <!-- Puissance Réelle / Cible -->
+                <div class="bg-base-100 rounded-2xl p-3 border border-base-content/10 shadow flex flex-col items-center justify-center text-center">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Puissance</div>
+                    <div class="text-2xl sm:text-3xl font-black text-primary leading-tight">
+                        @state.Power
+                    </div>
+                    <div class="text-[11px] font-bold text-warning">
+                        / @state.TargetWatts W
+                    </div>
+                </div>
+
+                <!-- Cadence -->
+                <div class="bg-base-100 rounded-2xl p-3 border border-base-content/10 shadow flex flex-col items-center justify-center text-center">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Cadence</div>
+                    <div class="text-2xl sm:text-3xl font-black text-secondary leading-tight">
+                        @state.Cadence
+                    </div>
+                    <div class="text-[11px] opacity-70">
+                        RPM
+                    </div>
+                </div>
+
+                <!-- Décompte Palier -->
+                <div class="bg-base-100 rounded-2xl p-3 border border-base-content/10 shadow flex flex-col items-center justify-center text-center">
+                    <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">Palier</div>
+                    <div class="text-2xl sm:text-3xl font-black font-mono text-accent leading-tight">
+                        @FormatTime(state.StepRemainingSeconds)
+                    </div>
+                    <div class="text-[10px] opacity-70">
+                        @(state.CurrentStepIndex + 1)/@state.TotalSteps
+                    </div>
+                </div>
+            </div>
+
+            <!-- RÉGLAGE GÉANT DE L'INTENSITÉ / FTP BIAS -->
+            <div class="bg-base-100 rounded-2xl p-3 border border-base-content/10 shadow flex flex-col gap-2">
+                <div class="flex items-center justify-between text-xs font-bold px-1 opacity-70">
+                    <span>RÉGLAGE INTENSITÉ</span>
+                    <span class="text-primary font-mono text-sm">@state.IntensityBias% (@state.TargetWatts W)</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button class="btn btn-neutral btn-lg flex-1 text-2xl font-black h-16 shadow active:scale-95 transition-transform"
+                            @onclick="() => AdjustIntensity(-1)">
+                        -1%
+                    </button>
+                    <button class="btn btn-neutral btn-lg flex-1 text-2xl font-black h-16 shadow active:scale-95 transition-transform"
+                            @onclick="() => AdjustIntensity(1)">
+                        +1%
+                    </button>
+                </div>
+            </div>
+
+            <!-- CONTRÔLES PALIERS & PLAY / PAUSE -->
+            <div class="grid grid-cols-4 gap-2">
+                <button class="btn btn-outline btn-lg h-14 font-bold text-lg rounded-2xl shadow active:scale-95"
+                        @onclick="PreviousStep"
+                        title="Palier précédent">
+                    ⏮
+                </button>
+
+                <button class="btn @(state.IsRunning ? "btn-warning" : "btn-success") btn-lg col-span-2 h-14 font-black text-lg rounded-2xl shadow-xl active:scale-95"
+                        @onclick="TogglePlay">
+                    @(state.IsRunning ? "⏸ PAUSE" : "▶ REPRENDRE")
+                </button>
+
+                <button class="btn btn-outline btn-lg h-14 font-bold text-lg rounded-2xl shadow active:scale-95"
+                        @onclick="NextStep"
+                        title="Palier suivant">
+                    ⏭
+                </button>
+            </div>
+        </main>
+    }
+
+    <!-- 3. PIED DE PAGE : TEMPS TOTAL RESTANT -->
+    <footer class="bg-base-100/90 backdrop-blur rounded-2xl p-2.5 border border-base-content/10 text-center flex items-center justify-between text-xs font-semibold shadow">
+        <span class="opacity-70">Séance totale :</span>
+        <span class="font-mono text-accent font-bold">
+            @FormatTime(state.TotalRemainingSeconds) / @FormatTime(state.TotalSeconds)
+        </span>
+        <a href="workouts" class="btn btn-ghost btn-xs text-error">Quitter</a>
+    </footer>
+</div>
+
+@code {
+    private DotNetObjectReference<Remote>? dotNetHelper;
+    private bool isConnected = false;
+    private string targetHostId = "";
+    private string manualHostId = "";
+    private string errorMessage = "";
+
+    private RemoteWorkoutState state = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetHelper = DotNetObjectReference.Create(this);
+
+            try
+            {
+                // Empêche le smartphone de s'éteindre sur le guidon
+                await JSRuntime.InvokeVoidAsync("workoutScreen.requestWakeLock");
+            }
+            catch { }
+
+            // Récupère l'ID hôte depuis le hash d'URL (#nkmr-xxx) ou query param (?session=xxx)
+            var uri = new Uri(Navigation.Uri);
+            var hash = uri.Fragment.TrimStart('#');
+
+            if (!string.IsNullOrEmpty(hash))
+            {
+                targetHostId = hash;
+            }
+            else
+            {
+                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                targetHostId = query["session"] ?? "";
+            }
+
+            if (!string.IsNullOrEmpty(targetHostId))
+            {
+                await ConnectToHost(targetHostId);
+            }
+        }
+    }
+
+    private async Task ConnectToHost(string hostId)
+    {
+        errorMessage = "";
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutRemote.connect", dotNetHelper, hostId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task ConnectManual()
+    {
+        if (!string.IsNullOrWhiteSpace(manualHostId))
+        {
+            targetHostId = manualHostId.Trim();
+            await ConnectToHost(targetHostId);
+        }
+    }
+
+    [JSInvokable]
+    public void OnConnectedToHost()
+    {
+        isConnected = true;
+        errorMessage = "";
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnDisconnectedFromHost()
+    {
+        isConnected = false;
+        errorMessage = "Déconnecté du PC. Tentative de reconnexion...";
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnRemoteError(string error)
+    {
+        errorMessage = error;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnStateReceived(string json)
+    {
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var newState = System.Text.Json.JsonSerializer.Deserialize<RemoteWorkoutState>(json, options);
+            if (newState != null)
+            {
+                state = newState;
+                isConnected = true;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SendCommand(string action, int delta = 0)
+    {
+        var cmd = new { action, delta };
+        var json = System.Text.Json.JsonSerializer.Serialize(cmd);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("workoutRemote.sendCommand", json);
+        }
+        catch { }
+    }
+
+    private Task AdjustIntensity(int delta) => SendCommand("adjustIntensity", delta);
+    private Task TogglePlay() => SendCommand("togglePlay");
+    private Task PreviousStep() => SendCommand("prevStep");
+    private Task NextStep() => SendCommand("nextStep");
+
+    private string FormatTime(int seconds)
+    {
+        int m = Math.Max(0, seconds) / 60;
+        int s = Math.Max(0, seconds) % 60;
+        return $"{m:D2}:{s:D2}";
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            _ = JSRuntime.InvokeVoidAsync("workoutRemote.dispose");
+            _ = JSRuntime.InvokeVoidAsync("workoutScreen.releaseWakeLock");
+        }
+        catch { }
+        dotNetHelper?.Dispose();
+    }
+
+    public class RemoteWorkoutState
+    {
+        public int Power { get; set; }
+        public int TargetWatts { get; set; }
+        public int Cadence { get; set; }
+        public int StepRemainingSeconds { get; set; }
+        public int TotalRemainingSeconds { get; set; }
+        public int TotalSeconds { get; set; }
+        public int IntensityBias { get; set; } = 100;
+        public bool IsRunning { get; set; }
+        public string ZoneName { get; set; } = "Zone Z2";
+        public string ZoneColor { get; set; } = "#38bdf8";
+        public int CurrentStepIndex { get; set; }
+        public int TotalSteps { get; set; }
+        public string WorkoutName { get; set; } = "";
+    }
+}
